@@ -1,0 +1,293 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admin_users")
+}
+
+model Profile {
+  id                   Int      @id @default(autoincrement())
+  name                 String
+  title                String
+  college              String?
+  department           String?
+  course               String?
+  location             String?
+  email                String?
+  phone                String?
+  profileImageUrl      String?  @db.Text
+  profileImageFileName String?
+  bio                  String?  @db.Text
+  shortBio             String?  @db.Text
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+model Hero {
+  id                  Int      @id @default(autoincrement())
+  title               String
+  subtitle            String?
+  description         String?  @db.Text
+  primaryButtonText   String?
+  primaryButtonUrl    String?
+  secondaryButtonText String?
+  secondaryButtonUrl  String?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("heroes")
+}
+
+model About {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?  @db.Text
+  paragraphs  Json?
+  highlights  Json?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("abouts")
+}
+
+model Service {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String   @db.Text
+  icon        String?
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+  @@map("services")
+}
+
+model Skill {
+  id          Int      @id @default(autoincrement())
+  name        String
+  category    String
+  proficiency String?
+  icon        String?
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([order])
+  @@map("skills")
+}
+
+model Project {
+  id               Int            @id @default(autoincrement())
+  title            String
+  slug             String         @unique
+  shortDescription String?        @db.Text
+  description      String         @db.Text
+  technologies     Json?
+  githubUrl        String?
+  liveUrl          String?
+  thumbnailUrl     String?        @db.Text
+  featured         Boolean        @default(false)
+  order            Int            @default(0)
+  isActive         Boolean        @default(true)
+  images           ProjectImage[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([featured])
+  @@index([order])
+  @@map("projects")
+}
+
+model ProjectImage {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  imageUrl  String   @db.Text
+  altText   String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([order])
+  @@map("project_images")
+}
+
+model Experience {
+  id           Int      @id @default(autoincrement())
+  company      String
+  position     String
+  location     String?
+  startDate    String
+  endDate      String?
+  isCurrent    Boolean  @default(false)
+  description  String?  @db.Text
+  technologies Json?
+  order        Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([order])
+  @@map("experiences")
+}
+
+model Education {
+  id          Int      @id @default(autoincrement())
+  institution String
+  degree      String
+  department  String?
+  startYear   String?
+  endYear     String?
+  grade       String?
+  description String?  @db.Text
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+  @@map("educations")
+}
+
+model Certification {
+  id            Int      @id @default(autoincrement())
+  title         String
+  issuer        String
+  issueDate     String?
+  credentialId  String?
+  credentialUrl String?
+  fileUrl       String?  @db.Text
+  fileName      String?
+  fileType      String?
+  fileSize      Int?
+  order         Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([order])
+  @@map("certifications")
+}
+
+model Achievement {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?  @db.Text
+  date        String?
+  link        String?
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([order])
+  @@map("achievements")
+}
+
+model Resume {
+  id         Int      @id @default(autoincrement())
+  fileName   String
+  fileUrl    String   @db.Text
+  fileType   String   @default("application/pdf")
+  fileSize   Int
+  isActive   Boolean  @default(true)
+  uploadedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([isActive])
+  @@map("resumes")
+}
+
+model SocialLink {
+  id        Int      @id @default(autoincrement())
+  platform  String
+  label     String
+  url       String
+  icon      String?
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+  @@map("social_links")
+}
+
+model NavigationItem {
+  id           Int      @id @default(autoincrement())
+  label        String
+  url          String
+  order        Int      @default(0)
+  isActive     Boolean  @default(true)
+  openInNewTab Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([order])
+  @@map("navigation_items")
+}
+
+model Footer {
+  id            Int      @id @default(autoincrement())
+  description   String?  @db.Text
+  copyrightText String?
+  email         String?
+  phone         String?
+  location      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("footers")
+}
+
+model WebsiteSettings {
+  id                Int      @id @default(autoincrement())
+  siteTitle         String   @default("Dhanush M | Portfolio")
+  siteDescription   String?  @db.Text
+  faviconUrl        String?  @db.Text
+  metaKeywords      String?  @db.Text
+  googleAnalyticsId String?
+  maintenanceMode   Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("website_settings")
+}
+
+model ContactMessage {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String
+  subject   String
+  message   String   @db.Text
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("contact_messages")
+}

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <defs>
+    <linearGradient id="dmGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7C3AED" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+    <linearGradient id="dmBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="100%" stop-color="#F1F5F9" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#7C3AED" flood-opacity="0.15" />
+    </filter>
+  </defs>
+  <!-- Rounded Base Container -->
+  <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#dmBg)" stroke="rgba(124, 58, 237, 0.2)" stroke-width="1.5" filter="url(#shadow)" />
+  <!-- Monogram D -->
+  <path d="M 13 14 L 20 14 C 24.5 14 27 17.5 27 24 C 27 30.5 24.5 34 20 34 L 13 34 Z" fill="none" stroke="url(#dmGradient)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Monogram M Intersecting -->
+  <path d="M 24 34 L 28 17 L 31.5 25 L 35 17 L 39 34" fill="none" stroke="#0F172A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9" />
+  <!-- Subtle Glowing Dot -->
+  <circle cx="21" cy="24" r="2" fill="url(#dmGradient)" />
+</svg>

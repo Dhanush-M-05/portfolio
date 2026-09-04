@@ -1,0 +1,185 @@
+.experience-section {
+  position: relative;
+  width: 100%;
+}
+
+.experience-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(24px, 3.5vw, 32px);
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.experience-timeline-item {
+  display: flex;
+  gap: clamp(12px, 2.5vw, 24px);
+  width: 100%;
+}
+
+.timeline-marker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.timeline-node-icon {
+  width: clamp(32px, 4vw, 42px);
+  height: clamp(32px, 4vw, 42px);
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 2px solid var(--accent-primary);
+  color: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.25);
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.timeline-vertical-line {
+  width: 2px;
+  flex: 1;
+  background: linear-gradient(180deg, var(--accent-primary) 0%, rgba(226, 232, 240, 0.8) 100%);
+  margin-top: 8px;
+}
+
+.experience-glass-card {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-surface);
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--radius-xl);
+  padding: clamp(18px, 3vw, 32px);
+  transition: all var(--transition-base);
+  box-sizing: border-box;
+}
+
+.experience-glass-card:hover {
+  background: #FFFFFF;
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: var(--shadow-glass-hover);
+  transform: translateY(-3px);
+}
+
+.experience-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.experience-type-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-primary);
+  background: var(--accent-light);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  margin-bottom: 8px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.experience-role-title {
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.experience-org-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent-secondary);
+}
+
+.experience-meta-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(241, 245, 249, 0.85);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.meta-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.experience-summary {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 18px;
+}
+
+.experience-responsibilities {
+  margin-bottom: 18px;
+}
+
+.responsibilities-heading {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.responsibilities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.responsibility-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.resp-check {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.experience-tech-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+@media (max-width: 640px) {
+  .experience-card-header {
+    flex-direction: column;
+  }
+
+  .experience-meta-pill {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

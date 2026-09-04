@@ -1,0 +1,28 @@
+{
+  "name": "dhanush-m-portfolio-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-stack developer portfolio with Vite/React frontend and Node/Express/Prisma/MySQL backend",
+  "scripts": {
+    "dev": "npm run dev:frontend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "preview:frontend": "npm run preview --prefix frontend",
+    "start:backend": "npm run start --prefix backend",
+    "test:backend": "npm run test --prefix backend",
+    "seed:backend": "npm run prisma:seed --prefix backend",
+    "migrate:backend": "npm run prisma:migrate --prefix backend"
+  },
+  "keywords": [
+    "portfolio",
+    "react",
+    "vite",
+    "express",
+    "prisma",
+    "mysql",
+    "full-stack"
+  ],
+  "author": "Dhanush M",
+  "license": "ISC"
+}

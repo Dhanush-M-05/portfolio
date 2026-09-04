@@ -1,0 +1,103 @@
+.skills-section {
+  position: relative;
+  width: 100%;
+}
+
+.skills-filter-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 36px;
+  width: 100%;
+}
+
+.skills-tabs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-sm);
+  padding: 6px 8px;
+  border-radius: var(--radius-full);
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.category-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-heading);
+  font-size: clamp(0.78rem, 1.2vw, 0.85rem);
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 7px 16px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.category-tab-btn:hover {
+  color: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.category-tab-btn.is-active {
+  color: #0F172A;
+  background: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(100, 116, 139, 0.12);
+}
+
+.category-count {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: rgba(226, 232, 240, 0.8);
+  color: var(--text-secondary);
+}
+
+.category-tab-btn.is-active .category-count {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
+.skills-grid-layout {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(14px, 2vw, 20px);
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .skills-grid-layout {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .skills-grid-layout {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .skills-tabs-pill {
+    border-radius: var(--radius-lg);
+    padding: 6px;
+    gap: 4px;
+  }
+
+  .category-tab-btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+}

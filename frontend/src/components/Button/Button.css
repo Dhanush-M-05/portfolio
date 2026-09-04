@@ -1,0 +1,145 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-heading);
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  white-space: nowrap;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Sizes */
+.btn-sm {
+  font-size: 0.8125rem;
+  padding: 8px 18px;
+  gap: 6px;
+}
+
+.btn-md {
+  font-size: 0.9375rem;
+  padding: 12px 24px;
+  gap: 8px;
+}
+
+.btn-lg {
+  font-size: 1.0625rem;
+  padding: 14px 30px;
+  gap: 10px;
+}
+
+/* Primary Variant (Signature deep obsidian pill button matching reference mockup) */
+.btn-primary {
+  background: #0F172A;
+  color: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-primary:hover {
+  background: #1E293B;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.32);
+  color: #FFFFFF;
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* Accent Variant (Luminous violet-indigo gradient pill) */
+.btn-accent {
+  background: var(--accent-gradient);
+  color: #FFFFFF;
+  font-weight: 700;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+}
+
+.btn-accent:hover {
+  filter: brightness(1.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
+}
+
+.btn-accent:active {
+  transform: translateY(0);
+}
+
+/* Secondary Variant (Luminous Frosted White Glass Pill) */
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  color: var(--text-primary);
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.btn-secondary:hover {
+  background: #FFFFFF;
+  border-color: rgba(99, 102, 241, 0.4);
+  color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.12);
+}
+
+/* Outline Variant */
+.btn-outline {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1.5px solid rgba(203, 213, 225, 0.9);
+}
+
+.btn-outline:hover {
+  background: var(--accent-light);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+/* Ghost Variant */
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--accent-primary);
+}
+
+/* Disabled State */
+.btn:disabled,
+.btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Loading State */
+.btn.is-loading {
+  color: transparent !important;
+  pointer-events: none;
+}
+
+.btn-spinner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: currentColor;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

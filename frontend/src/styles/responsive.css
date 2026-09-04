@@ -1,0 +1,247 @@
+/* ==========================================================================
+   RESPONSIVE DESIGN SYSTEM & BREAKPOINT LADDER
+   Engineered for seamless adaptation from 320px up to 2560px+
+   ========================================================================== */
+
+/* ==========================================================================
+   1. ULTRA-WIDE & LARGE DESKTOPS (1536px - 2560px+)
+   ========================================================================== */
+@media (min-width: 1536px) {
+  :root {
+    --container-max-width: 1360px;
+    --container-narrow-width: 980px;
+  }
+
+  .hero-main-name {
+    font-size: clamp(3.8rem, 4.5vw, 5rem);
+  }
+
+  .hero-description-text {
+    font-size: 1.15rem;
+    max-width: 600px;
+  }
+}
+
+@media (min-width: 1920px) {
+  :root {
+    --container-max-width: 1440px;
+    --container-narrow-width: 1040px;
+  }
+}
+
+/* ==========================================================================
+   2. STANDARD LAPTOPS & DESKTOPS (1200px - 1440px)
+   ========================================================================== */
+@media (max-width: 1366px) {
+  :root {
+    --container-max-width: 1200px;
+  }
+}
+
+@media (max-width: 1200px) {
+  :root {
+    --container-gutter: 32px;
+  }
+
+  .hero-grid-layout {
+    gap: 36px;
+  }
+}
+
+/* ==========================================================================
+   3. LANDSCAPE TABLET & SMALL LAPTOP (961px - 1100px)
+   ========================================================================== */
+@media (max-width: 1080px) {
+  .hero-grid-layout {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+
+  .hero-content-column {
+    text-align: center;
+    align-items: center;
+  }
+
+  .hero-description-text {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .hero-cta-group {
+    justify-content: center;
+  }
+
+  .hero-footer-row {
+    justify-content: center;
+  }
+
+  .hero-visual-column {
+    width: 100%;
+    max-width: 580px;
+    margin: 0 auto;
+  }
+}
+
+/* ==========================================================================
+   4. PORTRAIT TABLET (768px - 960px)
+   ========================================================================== */
+@media (max-width: 960px) {
+  :root {
+    --container-gutter: 28px;
+  }
+
+  .glass-card {
+    padding: 24px;
+  }
+
+  /* Prevent any floating badges from protruding past screen edges */
+  .badge-top-right,
+  .badge-bottom-left {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   5. LARGE MOBILE & SMALL TABLET (481px - 767px)
+   ========================================================================== */
+@media (max-width: 767px) {
+  :root {
+    --container-gutter: 20px;
+    --navbar-height: 64px;
+  }
+
+  .section-header {
+    margin-bottom: 36px;
+  }
+
+  .section-subtitle {
+    font-size: 0.975rem;
+  }
+
+  .glass-card {
+    padding: 20px;
+    border-radius: var(--radius-md);
+  }
+
+  .card-performance {
+    position: static !important;
+    width: 100% !important;
+    margin-top: 14px !important;
+    transform: none !important;
+  }
+
+  .card-stack {
+    position: static !important;
+    width: 100% !important;
+    margin-top: 10px !important;
+    transform: none !important;
+  }
+}
+
+/* ==========================================================================
+   6. STANDARD MOBILE (361px - 480px)
+   ========================================================================== */
+@media (max-width: 480px) {
+  :root {
+    --container-gutter: 16px;
+    --section-padding-y: 48px;
+  }
+
+  .hero-section {
+    padding-top: calc(var(--navbar-height) + 32px);
+    padding-bottom: 56px;
+    min-height: auto;
+  }
+
+  .hero-main-name {
+    font-size: clamp(2rem, 9vw, 2.6rem);
+  }
+
+  .hero-professional-title {
+    font-size: clamp(1.4rem, 6vw, 1.85rem);
+  }
+
+  .hero-positioning-tagline {
+    font-size: 1.05rem;
+  }
+
+  .hero-description-text {
+    font-size: 0.925rem;
+  }
+
+  .hero-cta-group {
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .hero-cta-group .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .glass-card {
+    padding: 18px 16px;
+  }
+
+  .glass-panel {
+    border-radius: var(--radius-lg);
+  }
+
+  .section-label {
+    font-size: 0.75rem;
+    padding: 4px 12px;
+  }
+}
+
+/* ==========================================================================
+   7. ULTRA-COMPACT MOBILE (320px - 360px)
+   Specialized tuning to guarantee zero horizontal scroll on smallest screens
+   ========================================================================== */
+@media (max-width: 360px) {
+  :root {
+    --container-gutter: 12px;
+    --section-padding-y: 40px;
+    --section-gap: 32px;
+  }
+
+  .hero-section {
+    padding-top: calc(var(--navbar-height) + 20px);
+    padding-bottom: 40px;
+  }
+
+  .hero-greeting-pill {
+    padding: 4px 12px;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+  }
+
+  .hero-main-name {
+    font-size: 1.85rem;
+  }
+
+  .hero-professional-title {
+    font-size: 1.25rem;
+  }
+
+  .hero-positioning-tagline {
+    font-size: 0.95rem;
+  }
+
+  .hero-description-text {
+    font-size: 0.875rem;
+  }
+
+  .glass-card {
+    padding: 16px 12px;
+  }
+
+  .hero-footer-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .hero-divider-dot {
+    display: none;
+  }
+}
