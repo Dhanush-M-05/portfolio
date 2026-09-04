@@ -8,9 +8,11 @@ import FileUploader from '../../components/Admin/FileUploader/FileUploader';
 import Toast from '../../components/Admin/Toast/Toast';
 import { FileTextIcon, ExternalLinkIcon } from '../../components/Icons/Icons';
 import { getCertificateViewUrl } from '../../services/experienceService';
+import { useDocumentPreview } from '../../context/DocumentPreviewContext';
 
 export const ManageCertifications = () => {
   const { certifications, addCertification, updateCertification, deleteCertification } = useCMS();
+  const { openPreview } = useDocumentPreview();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -155,10 +157,18 @@ export const ManageCertifications = () => {
         return (
           <div>
             {hasFile ? (
-              <a
-                href={viewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() =>
+                  openPreview({
+                    title: row.title || row.name,
+                    subtitle: row.issuer,
+                    badge: 'Certificate Preview',
+                    fileUrl: viewUrl,
+                    iconType: 'certificate',
+                    allowDownload: false,
+                  })
+                }
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -171,13 +181,13 @@ export const ManageCertifications = () => {
                   padding: '4px 8px',
                   borderRadius: '6px',
                   border: '1px solid #E0E7FF',
+                  cursor: 'pointer',
                 }}
-                title="Open uploaded certificate document in new tab"
+                title="Preview uploaded certificate document in mini modal"
               >
                 <FileTextIcon size={14} />
                 <span>View Certificate</span>
-                <ExternalLinkIcon size={12} />
-              </a>
+              </button>
             ) : (
               <span style={{ color: '#EF4444', fontSize: '0.78rem', fontWeight: 600, background: '#FEF2F2', padding: '3px 8px', borderRadius: '4px' }}>
                 Missing File
@@ -364,15 +374,23 @@ export const ManageCertifications = () => {
                     </span>
                   )}
                 </div>
-                <a
-                  href={getCertificateViewUrl(editingCert.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() =>
+                    openPreview({
+                      title: editingCert.name || editingCert.title,
+                      subtitle: editingCert.issuer,
+                      badge: 'Active Certificate',
+                      fileUrl: getCertificateViewUrl(editingCert.id),
+                      iconType: 'certificate',
+                      allowDownload: false,
+                    })
+                  }
                   className="admin-btn admin-btn-secondary"
-                  style={{ padding: '4px 10px', fontSize: '0.75rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
                 >
-                  Preview <ExternalLinkIcon size={12} />
-                </a>
+                  Preview
+                </button>
               </div>
             )}
 

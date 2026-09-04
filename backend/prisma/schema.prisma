@@ -280,6 +280,11 @@ model WebsiteSettings {
   metaKeywords      String?  @db.Text
   googleAnalyticsId String?
   maintenanceMode   Boolean  @default(false)
+  brandName         String?  @default("Dhanush M")
+  brandRole         String?  @default("Web Developer")
+  logoLetters       String?  @default("DM")
+  resumeBtnText     String?  @default("Resume")
+  talkBtnText       String?  @default("Let's Talk")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

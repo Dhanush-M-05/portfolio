@@ -3,13 +3,11 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   ShieldCheckIcon,
-  SparklesIcon,
   LockIcon,
   UserIcon,
   EyeIcon,
   EyeOffIcon,
   ArrowLeftIcon,
-  CheckIcon,
 } from '../../components/Icons/Icons';
 import './AdminLogin.css';
 
@@ -30,7 +28,6 @@ export const AdminLogin = () => {
   const [formErrors, setFormErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [demoFilled, setDemoFilled] = useState(false);
 
   // If already authenticated, redirect to dashboard
   useEffect(() => {
@@ -68,18 +65,6 @@ export const AdminLogin = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleFillDemo = () => {
-    setFormData({
-      usernameOrEmail: 'dhanush2005mp@gmail.com',
-      password: 'AdminPassword@2026',
-      rememberMe: true,
-    });
-    setFormErrors({});
-    setAuthError('');
-    setDemoFilled(true);
-    setTimeout(() => setDemoFilled(false), 2500);
   };
 
   return (
@@ -185,7 +170,7 @@ export const AdminLogin = () => {
             )}
           </div>
 
-          {/* Remember Session & Quick Fill */}
+          {/* Remember Session */}
           <div className="login-options-row">
             <label className="login-remember-label">
               <input
@@ -196,16 +181,6 @@ export const AdminLogin = () => {
               />
               <span>Remember session</span>
             </label>
-
-            <button
-              type="button"
-              className="login-demo-pill-btn"
-              onClick={handleFillDemo}
-              title="Click to populate reviewer credentials automatically"
-            >
-              {demoFilled ? <CheckIcon size={14} /> : <SparklesIcon size={14} />}
-              <span>{demoFilled ? 'Credentials Populated!' : 'Fill Reviewer Credentials'}</span>
-            </button>
           </div>
 
           {/* Submit Action */}

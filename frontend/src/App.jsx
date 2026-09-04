@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { CMSProvider } from './context/CMSContext';
+import { DocumentPreviewProvider } from './context/DocumentPreviewContext';
 
 // Public Components
 import Navbar from './components/Navbar/Navbar';
@@ -254,7 +255,9 @@ export function App() {
   return (
     <AuthProvider>
       <CMSProvider>
-        <AppLayout />
+        <DocumentPreviewProvider>
+          <AppLayout />
+        </DocumentPreviewProvider>
       </CMSProvider>
     </AuthProvider>
   );

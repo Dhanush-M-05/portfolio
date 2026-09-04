@@ -2,11 +2,13 @@ import React from 'react';
 import { SectionTitle } from '../../components/SectionTitle/SectionTitle';
 import { AwardIcon, ExternalLinkIcon, CalendarIcon, FileTextIcon } from '../../components/Icons/Icons';
 import { useCMS } from '../../context/CMSContext';
+import { useDocumentPreview } from '../../context/DocumentPreviewContext';
 import { getCertificateViewUrl } from '../../services/experienceService';
 import './Certifications.css';
 
 export const Certifications = () => {
   const { certifications, getSection } = useCMS();
+  const { openPreview } = useDocumentPreview();
   const sectionConfig = getSection('certifications');
 
   const activeCertifications = (certifications || [])
@@ -62,17 +64,24 @@ export const Certifications = () => {
 
                 <div className="cert-card-actions">
                   {documentUrl && (
-                    <a
-                      href={documentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openPreview({
+                          title: cert.title || cert.name,
+                          subtitle: cert.issuer,
+                          badge: 'Verified Certificate',
+                          fileUrl: documentUrl,
+                          iconType: 'certificate',
+                          allowDownload: false,
+                        })
+                      }
                       className="cert-verify-link cert-primary-btn"
                       aria-label={`View certificate for ${cert.title || cert.name}`}
                     >
                       <FileTextIcon size={15} />
                       <span>{cert.verifyBtnText || sectionConfig.verifyBtnText || "View Certificate"}</span>
-                      <ExternalLinkIcon size={13} />
-                    </a>
+                    </button>
                   )}
 
                   {cert.credentialUrl && cert.credentialUrl.trim() !== '' && cert.credentialUrl !== documentUrl && (

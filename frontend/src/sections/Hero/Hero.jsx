@@ -95,8 +95,6 @@ export const Hero = () => {
               <a
                 href={resumeFile}
                 download={`${profile.name.replace(/\s+/g, '_')}_Resume.pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="btn btn-secondary btn-lg"
               >
                 <DownloadIcon size={18} />

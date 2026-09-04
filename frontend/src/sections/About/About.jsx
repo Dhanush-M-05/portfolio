@@ -222,8 +222,6 @@ export const About = () => {
                 <a
                   href={getResumeDownloadUrl()}
                   download="Dhanush_M_Resume.pdf"
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="btn btn-secondary about-cta-btn"
                 >
                   <DownloadIcon size={16} /> Download CV

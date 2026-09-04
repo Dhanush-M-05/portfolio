@@ -44,6 +44,11 @@ async function updateSettings(req, res) {
     'metaKeywords',
     'googleAnalyticsId',
     'maintenanceMode',
+    'brandName',
+    'brandRole',
+    'logoLetters',
+    'resumeBtnText',
+    'talkBtnText',
   ];
 
   const updateData = {};

@@ -6,13 +6,35 @@ const { successResponse, errorResponse } = require('../utils/apiResponse');
  * GET /api/navigation
  */
 async function getNavigationItems(req, res) {
-  const { all } = req.query;
+  const { all, full } = req.query;
   const where = all === 'true' ? {} : { isActive: true };
 
   const items = await prisma.navigationItem.findMany({
     where,
     orderBy: { order: 'asc' },
   });
+
+  if (full === 'true') {
+    const settings = await prisma.websiteSettings.findFirst();
+    return successResponse(res, {
+      siteTitle: settings?.siteTitle || 'Dhanush M | Portfolio',
+      brandName: settings?.brandName || 'Dhanush M',
+      brandRole: settings?.brandRole || 'Web Developer',
+      logoLetters: settings?.logoLetters ? settings.logoLetters.split('') : ['D', 'M'],
+      resumeBtnText: settings?.resumeBtnText || 'Resume',
+      talkBtnText: settings?.talkBtnText || "Let's Talk",
+      links: items.map((i) => ({
+        id: i.id,
+        label: i.label,
+        url: i.url,
+        target: i.url.startsWith('#') ? i.url.slice(1) : i.url,
+        order: i.order,
+        isActive: i.isActive,
+        isVisible: i.isActive,
+        openInNewTab: i.openInNewTab,
+      })),
+    }, 'Navigation configuration retrieved successfully');
+  }
 
   return successResponse(res, items, 'Navigation items retrieved successfully');
 }
@@ -69,24 +91,117 @@ async function updateNavigationItem(req, res) {
  * PUT /api/navigation
  */
 async function updateNavigation(req, res) {
-  const { links } = req.body;
-  if (Array.isArray(links)) {
-    for (const item of links) {
-      if (item.id && !isNaN(Number(item.id))) {
-        await prisma.navigationItem.update({
-          where: { id: Number(item.id) },
-          data: {
-            ...(item.label && { label: item.label }),
-            ...(item.url && { url: item.url }),
-            ...(item.order !== undefined && { order: Number(item.order) }),
-            ...(item.isActive !== undefined && { isActive: Boolean(item.isActive) }),
-            ...(item.openInNewTab !== undefined && { openInNewTab: Boolean(item.openInNewTab) }),
-          },
-        }).catch(() => null);
-      }
+  const {
+    brandName,
+    brandRole,
+    logoLetters,
+    resumeBtnText,
+    talkBtnText,
+    siteTitle,
+    links,
+  } = req.body;
+
+  // 1. Update WebsiteSettings if brand/header/siteTitle settings are provided
+  const settingsUpdate = {};
+  if (brandName !== undefined) settingsUpdate.brandName = brandName;
+  if (brandRole !== undefined) settingsUpdate.brandRole = brandRole;
+  if (siteTitle !== undefined) settingsUpdate.siteTitle = siteTitle;
+  if (resumeBtnText !== undefined) settingsUpdate.resumeBtnText = resumeBtnText;
+  if (talkBtnText !== undefined) settingsUpdate.talkBtnText = talkBtnText;
+  if (logoLetters !== undefined) {
+    settingsUpdate.logoLetters = Array.isArray(logoLetters)
+      ? logoLetters.join('')
+      : String(logoLetters);
+  }
+
+  if (Object.keys(settingsUpdate).length > 0) {
+    const existing = await prisma.websiteSettings.findFirst();
+    if (existing) {
+      await prisma.websiteSettings.update({
+        where: { id: existing.id },
+        data: settingsUpdate,
+      });
     }
   }
-  return successResponse(res, req.body, 'Navigation updated successfully');
+
+  // 2. Sync Navigation Items if links array is provided
+  if (Array.isArray(links)) {
+    const keptIds = [];
+
+    for (let idx = 0; idx < links.length; idx++) {
+      const item = links[idx];
+      const targetUrl = item.url || (item.target ? (item.target.startsWith('#') ? item.target : `#${item.target}`) : '#');
+      const orderVal = item.order !== undefined ? Number(item.order) : idx + 1;
+      const activeVal = item.isActive !== undefined ? Boolean(item.isActive) : (item.isVisible !== undefined ? Boolean(item.isVisible) : true);
+      const newTabVal = Boolean(item.openInNewTab);
+
+      if (item.id && !isNaN(Number(item.id))) {
+        // Update existing item
+        const updatedItem = await prisma.navigationItem.update({
+          where: { id: Number(item.id) },
+          data: {
+            label: item.label || 'Link',
+            url: targetUrl,
+            order: orderVal,
+            isActive: activeVal,
+            openInNewTab: newTabVal,
+          },
+        }).catch(() => null);
+
+        if (updatedItem) {
+          keptIds.push(updatedItem.id);
+        }
+      } else if (item.label) {
+        // Create newly added item
+        const createdItem = await prisma.navigationItem.create({
+          data: {
+            label: item.label,
+            url: targetUrl,
+            order: orderVal,
+            isActive: activeVal,
+            openInNewTab: newTabVal,
+          },
+        });
+        keptIds.push(createdItem.id);
+      }
+    }
+
+    // Delete navigation items removed by admin (if any existed and not in keptIds)
+    if (keptIds.length > 0) {
+      await prisma.navigationItem.deleteMany({
+        where: {
+          id: { notIn: keptIds },
+        },
+      }).catch(() => null);
+    }
+  }
+
+  // Retrieve fresh full configuration
+  const [updatedSettings, updatedItems] = await Promise.all([
+    prisma.websiteSettings.findFirst(),
+    prisma.navigationItem.findMany({ orderBy: { order: 'asc' } }),
+  ]);
+
+  const fullResponse = {
+    siteTitle: updatedSettings?.siteTitle || 'Dhanush M | Portfolio',
+    brandName: updatedSettings?.brandName || 'Dhanush M',
+    brandRole: updatedSettings?.brandRole || 'Web Developer',
+    logoLetters: updatedSettings?.logoLetters ? updatedSettings.logoLetters.split('') : ['D', 'M'],
+    resumeBtnText: updatedSettings?.resumeBtnText || 'Resume',
+    talkBtnText: updatedSettings?.talkBtnText || "Let's Talk",
+    links: updatedItems.map((i) => ({
+      id: i.id,
+      label: i.label,
+      url: i.url,
+      target: i.url.startsWith('#') ? i.url.slice(1) : i.url,
+      order: i.order,
+      isActive: i.isActive,
+      isVisible: i.isActive,
+      openInNewTab: i.openInNewTab,
+    })),
+  };
+
+  return successResponse(res, fullResponse, 'Navigation updated successfully');
 }
 
 /**

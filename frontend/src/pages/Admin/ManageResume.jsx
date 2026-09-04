@@ -11,9 +11,11 @@ import {
   SparklesIcon,
 } from '../../components/Icons/Icons';
 import { getResumeDownloadUrl, getResumeViewUrl } from '../../services/resumeService';
+import { useDocumentPreview } from '../../context/DocumentPreviewContext';
 
 export const ManageResume = () => {
   const { resume, updateResume } = useCMS();
+  const { openPreview } = useDocumentPreview();
   const [toastMessage, setToastMessage] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [previewKey, setPreviewKey] = useState(Date.now());
@@ -114,16 +116,27 @@ export const ManageResume = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <a
-                href={currentViewUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() =>
+                  openPreview({
+                    title: 'Resume Document',
+                    subtitle: resume?.fileName || 'Active Curriculum Vitae',
+                    badge: 'CV Preview',
+                    fileUrl: currentViewUrl,
+                    downloadUrl: getResumeDownloadUrl(),
+                    fileName: resume?.fileName || 'Dhanush-M-Resume.pdf',
+                    iconType: 'resume',
+                    actionText: 'Open Public Resume Page',
+                    actionLink: '/resume',
+                  })
+                }
                 className="admin-btn admin-btn-primary"
-                style={{ width: '100%', textDecoration: 'none', justifyContent: 'center' }}
+                style={{ width: '100%', justifyContent: 'center' }}
               >
-                <ExternalLinkIcon size={16} />
-                <span>View / Preview PDF in New Tab</span>
-              </a>
+                <FileTextIcon size={16} />
+                <span>Mini Preview Modal</span>
+              </button>
 
               <a
                 href={getResumeDownloadUrl()}
@@ -173,16 +186,26 @@ export const ManageResume = () => {
               <span>↻ Reload Preview</span>
             </button>
 
-            <a
-              href={currentViewUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() =>
+                openPreview({
+                  title: 'Resume Document',
+                  subtitle: resume?.fileName || 'Active Curriculum Vitae',
+                  badge: 'CV Preview',
+                  fileUrl: currentViewUrl,
+                  downloadUrl: getResumeDownloadUrl(),
+                  fileName: resume?.fileName || 'Dhanush-M-Resume.pdf',
+                  iconType: 'resume',
+                  actionText: 'Open Public Resume Page',
+                  actionLink: '/resume',
+                })
+              }
               className="admin-btn admin-btn-primary"
-              style={{ textDecoration: 'none' }}
             >
-              <ExternalLinkIcon size={15} />
-              <span>Open in New Window</span>
-            </a>
+              <FileTextIcon size={15} />
+              <span>Mini Preview Modal</span>
+            </button>
           </div>
         </div>
 

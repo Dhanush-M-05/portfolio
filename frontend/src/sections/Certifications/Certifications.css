@@ -129,6 +129,8 @@
   font-weight: 600;
   color: var(--accent-primary);
   text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
   transition: all var(--transition-fast);
 }
 

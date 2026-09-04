@@ -8,14 +8,17 @@ import {
   FileTextIcon,
   ExternalLinkIcon,
   SparklesIcon,
+  EyeIcon,
 } from '../components/Icons/Icons';
 import Button from '../components/Button/Button';
 import { useCMS } from '../context/CMSContext';
+import { useDocumentPreview } from '../context/DocumentPreviewContext';
 import { getResumeDownloadUrl, getResumeViewUrl } from '../services/resumeService';
 import './Resume.css';
 
 export const Resume = () => {
   const { profile, experience, education, certifications, projects, resume, socialLinks } = useCMS();
+  const { openPreview } = useDocumentPreview();
   const [activeTab, setActiveTab] = useState('pdf'); // default to 'pdf' for immediate preview of uploaded CV
 
   const getSocialUrl = (platformName, fallback) => {
@@ -52,16 +55,25 @@ export const Resume = () => {
           </div>
 
           <div className="resume-action-buttons">
-            <a
-              href={resumeViewUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() =>
+                openPreview({
+                  title: 'Professional Resume',
+                  subtitle: `${profile?.name || 'Dhanush M'} • ${resume?.fileName || 'Curriculum Vitae'}`,
+                  badge: 'Official CV',
+                  fileUrl: resumeViewUrl,
+                  downloadUrl: resumeDownloadUrl,
+                  fileName: resume?.fileName || 'Dhanush-M-Resume.pdf',
+                  iconType: 'resume',
+                })
+              }
               className="btn btn-secondary btn-md"
-              title="Open raw PDF in new browser tab"
+              title="Preview PDF in mini viewer"
             >
-              <ExternalLinkIcon size={16} />
-              <span>Open PDF in Tab</span>
-            </a>
+              <EyeIcon size={16} />
+              <span>Mini Preview</span>
+            </button>
 
             {activeTab === 'web' && (
               <Button
@@ -127,16 +139,25 @@ export const Resume = () => {
               </div>
 
               <div className="resume-pdf-card-actions">
-                <a
-                  href={resumeViewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() =>
+                    openPreview({
+                      title: 'Professional Resume',
+                      subtitle: `${profile?.name || 'Dhanush M'} • ${resume?.fileName || 'Curriculum Vitae'}`,
+                      badge: 'Official CV',
+                      fileUrl: resumeViewUrl,
+                      downloadUrl: resumeDownloadUrl,
+                      fileName: resume?.fileName || 'Dhanush-M-Resume.pdf',
+                      iconType: 'resume',
+                    })
+                  }
                   className="resume-card-action-btn"
-                  title="Open full page PDF view"
+                  title="Open mini viewer modal"
                 >
-                  <ExternalLinkIcon size={15} />
-                  <span>Fullscreen View</span>
-                </a>
+                  <EyeIcon size={15} />
+                  <span>Mini Window</span>
+                </button>
                 <a
                   href={resumeDownloadUrl}
                   download={resume?.fileName || "Dhanush-M-Resume.pdf"}

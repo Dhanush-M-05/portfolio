@@ -4,9 +4,10 @@ import AdminLayout from '../../components/Admin/AdminLayout/AdminLayout';
 import { SaveIcon, PlusIcon, TrashIcon, CheckIcon } from '../../components/Icons/Icons';
 
 export const ManageNavigation = () => {
-  const { navigation, updateNavigation } = useCMS();
+  const { navigation, updateNavigation, settings } = useCMS();
 
   const [headerConfig, setHeaderConfig] = useState({
+    siteTitle: "Dhanush M | Portfolio",
     logoInitials: "DM",
     brandName: "Dhanush M",
     brandRole: "Web Developer",
@@ -19,13 +20,14 @@ export const ManageNavigation = () => {
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
-    if (navigation) {
+    if (navigation || settings) {
       setHeaderConfig({
-        logoInitials: (navigation.logoLetters || ['D', 'M']).join(''),
-        brandName: navigation.brandName || "Dhanush M",
-        brandRole: navigation.brandRole || "Web Developer",
-        resumeBtnText: navigation.resumeBtnText || "Resume",
-        talkBtnText: navigation.talkBtnText || "Let's Talk"
+        siteTitle: settings?.siteTitle || navigation?.siteTitle || "Dhanush M | Portfolio",
+        logoInitials: (navigation?.logoLetters || ['D', 'M']).join(''),
+        brandName: navigation?.brandName || "Dhanush M",
+        brandRole: navigation?.brandRole || "Web Developer",
+        resumeBtnText: navigation?.resumeBtnText || "Resume",
+        talkBtnText: navigation?.talkBtnText || "Let's Talk"
       });
 
       setLinks(
@@ -42,7 +44,7 @@ export const ManageNavigation = () => {
         ]).sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
       );
     }
-  }, [navigation]);
+  }, [navigation, settings]);
 
   const handleHeaderChange = (e) => {
     const { name, value } = e.target;
@@ -104,6 +106,7 @@ export const ManageNavigation = () => {
         : ['D', 'M'];
 
       await updateNavigation({
+        siteTitle: headerConfig.siteTitle,
         logoLetters,
         brandName: headerConfig.brandName,
         brandRole: headerConfig.brandRole,
@@ -137,7 +140,21 @@ export const ManageNavigation = () => {
 
         <form onSubmit={handleSubmit} className="admin-form">
           <div className="admin-form-section">
-            <h3 className="admin-section-title">Brand & Header Settings</h3>
+            <h3 className="admin-section-title">Website Title & Navbar Brand Settings</h3>
+
+            <div className="admin-form-group" style={{ marginBottom: '16px' }}>
+              <label className="admin-label">Website Title (Browser Tab Title & SEO)</label>
+              <input
+                type="text"
+                name="siteTitle"
+                value={headerConfig.siteTitle}
+                onChange={handleHeaderChange}
+                placeholder="Dhanush M | Portfolio"
+                className="admin-input"
+                required
+              />
+              <span className="admin-help-text">Displayed on browser tabs, bookmarks, and search engine results.</span>
+            </div>
             
             <div className="admin-form-row">
               <div className="admin-form-group">

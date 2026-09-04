@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../components/Admin/AdminLayout/AdminLayout';
 import { useCMS } from '../../context/CMSContext';
 import Toast from '../../components/Admin/Toast/Toast';
@@ -7,15 +7,31 @@ export const ManageSettings = () => {
   const { settings, updateSettings } = useCMS();
 
   const [formData, setFormData] = useState({
-    siteTitle: settings.siteTitle || 'Dhanush M — Web Developer',
-    metaDescription: settings.metaDescription || '',
-    heroHeading: settings.heroHeading || 'Dhanush M',
-    heroTitle: settings.heroTitle || 'Web Developer',
-    heroTagline: settings.heroTagline || '',
-    aboutHeading: settings.aboutHeading || 'Building With Purpose',
-    contactEmail: settings.contactEmail || 'dhanush2005mp@gmail.com',
-    footerText: settings.footerText || 'Designed & Built with React and Pure CSS.',
+    siteTitle: settings?.siteTitle || 'Dhanush M | Portfolio',
+    metaDescription: settings?.metaDescription || '',
+    heroHeading: settings?.heroHeading || 'Dhanush M',
+    heroTitle: settings?.heroTitle || 'Web Developer',
+    heroTagline: settings?.heroTagline || '',
+    aboutHeading: settings?.aboutHeading || 'Building With Purpose',
+    contactEmail: settings?.contactEmail || 'dhanush2005mp@gmail.com',
+    footerText: settings?.footerText || 'Designed & Built with React and Pure CSS.',
   });
+
+  useEffect(() => {
+    if (settings) {
+      setFormData((prev) => ({
+        ...prev,
+        siteTitle: settings.siteTitle || prev.siteTitle,
+        metaDescription: settings.metaDescription || prev.metaDescription,
+        heroHeading: settings.heroHeading || prev.heroHeading,
+        heroTitle: settings.heroTitle || prev.heroTitle,
+        heroTagline: settings.heroTagline || prev.heroTagline,
+        aboutHeading: settings.aboutHeading || prev.aboutHeading,
+        contactEmail: settings.contactEmail || prev.contactEmail,
+        footerText: settings.footerText || prev.footerText,
+      }));
+    }
+  }, [settings]);
 
   const [toastMessage, setToastMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);

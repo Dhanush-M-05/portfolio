@@ -15,9 +15,11 @@ export const Navbar = () => {
   const isHomePage = location.pathname === '/';
 
   // Extract CMS driven navigation values
-  const logoLetters = (navigation?.logoLetters && navigation.logoLetters.length > 0)
+  const logoLetters = Array.isArray(navigation?.logoLetters) && navigation.logoLetters.length > 0
     ? navigation.logoLetters
-    : ['D', 'M'];
+    : typeof navigation?.logoLetters === 'string' && navigation.logoLetters.trim()
+      ? navigation.logoLetters.trim().split('')
+      : ['D', 'M'];
   const brandName = navigation?.brandName || profile?.name || 'Dhanush M';
   const brandRole = navigation?.brandRole || profile?.role || 'Web Developer';
   const resumeBtnText = navigation?.resumeBtnText || 'Resume';
@@ -80,20 +82,40 @@ export const Navbar = () => {
   }, [mobileMenuOpen]);
 
   // Handle section click or navigation
-  const handleNavClick = (sectionId) => {
+  const handleNavClick = (target, openInNewTab = false) => {
     setMobileMenuOpen(false);
+    if (!target) return;
 
-    if (isHomePage) {
-      if (sectionId === 'home') {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (target.startsWith('http://') || target.startsWith('https://')) {
+      if (openInNewTab) {
+        window.open(target, '_blank', 'noopener,noreferrer');
       } else {
-        const element = document.getElementById(sectionId);
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth' });
+        window.location.href = target;
+      }
+      return;
+    }
+
+    const sectionId = target.startsWith('#')
+      ? target.slice(1)
+      : target.startsWith('/')
+        ? null
+        : target;
+
+    if (sectionId) {
+      if (isHomePage) {
+        if (sectionId === 'home') {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+          const element = document.getElementById(sectionId);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth' });
+          }
         }
+      } else {
+        navigate(`/#${sectionId}`);
       }
     } else {
-      navigate(`/#${sectionId}`);
+      navigate(target);
     }
   };
 
@@ -125,7 +147,7 @@ export const Navbar = () => {
                     <button
                       type="button"
                       className={`nav-link-btn ${isActive ? 'is-active' : ''}`}
-                      onClick={() => handleNavClick(item.id)}
+                      onClick={() => handleNavClick(item.target || (item.url || '').replace(/^#/, '') || item.id, item.openInNewTab)}
                     >
                       {item.label}
                       {isActive && <span className="active-indicator" />}
@@ -195,7 +217,7 @@ export const Navbar = () => {
               <button
                 type="button"
                 className={`mobile-nav-link-btn mobile-nav-link ${isHomePage && activeSection === item.id ? 'is-active' : ''}`}
-                onClick={() => handleNavClick(item.id)}
+                onClick={() => handleNavClick(item.target || (item.url || '').replace(/^#/, '') || item.id, item.openInNewTab)}
               >
                 <span>{item.label}</span>
               </button>

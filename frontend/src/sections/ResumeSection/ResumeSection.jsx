@@ -2,11 +2,13 @@ import React from 'react';
 import { DownloadIcon, FileTextIcon, SparklesIcon } from '../../components/Icons/Icons';
 import Button from '../../components/Button/Button';
 import { useCMS } from '../../context/CMSContext';
-import { getResumeDownloadUrl } from '../../services/resumeService';
+import { useDocumentPreview } from '../../context/DocumentPreviewContext';
+import { getResumeDownloadUrl, getResumeViewUrl } from '../../services/resumeService';
 import './ResumeSection.css';
 
 export const ResumeSection = () => {
-  const { resume, getSection } = useCMS();
+  const { resume, profile, getSection } = useCMS();
+  const { openPreview } = useDocumentPreview();
   const sectionConfig = getSection('resume');
 
   const badgeText = sectionConfig.label || "Comprehensive Resume";
@@ -36,7 +38,19 @@ export const ResumeSection = () => {
 
           <div className="resume-cta-actions">
             <Button
-              to="/resume"
+              onClick={() =>
+                openPreview({
+                  title: 'Professional Resume',
+                  subtitle: `${profile?.name || 'Dhanush M'} • ${resume?.fileName || 'Curriculum Vitae'}`,
+                  badge: 'Official CV',
+                  fileUrl: getResumeViewUrl(),
+                  downloadUrl: getResumeDownloadUrl(),
+                  fileName: resume?.fileName || 'Dhanush-M-Resume.pdf',
+                  iconType: 'resume',
+                  actionText: 'Open Full Interactive CV',
+                  actionLink: '/resume',
+                })
+              }
               variant="primary"
               size="lg"
               icon={FileTextIcon}

@@ -1,7 +1,7 @@
 import api from './api';
 
 export const getNavigation = async (all = false) => {
-  const response = await api.get(`/api/navigation${all ? '?all=true' : ''}`);
+  const response = await api.get(`/api/navigation?full=true${all ? '&all=true' : ''}`);
   return response.data.data !== undefined ? response.data.data : response.data;
 };
 

@@ -174,6 +174,13 @@ export const CMSProvider = ({ children }) => {
   const [about, setAbout] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Synchronize browser tab title dynamically with siteTitle setting
+  useEffect(() => {
+    if (settings?.siteTitle) {
+      document.title = settings.siteTitle;
+    }
+  }, [settings?.siteTitle]);
+
   // Initialize data from API or fallbacks
   useEffect(() => {
     try {
@@ -245,10 +252,37 @@ export const CMSProvider = ({ children }) => {
         if (socData) setSocialLinks(socData);
         if (resData) setResume(resData);
         if (msgData) setMessages(msgData);
-        if (setData) setSettings(setData);
+        if (setData) {
+          setSettings(setData);
+          if (setData.siteTitle) {
+            document.title = setData.siteTitle;
+          }
+        }
         if (aboutData) setAbout(aboutData);
         if (secData) setSections(secData);
-        if (navData) setNavigation(navData);
+        if (navData) {
+          const links = Array.isArray(navData) ? navData : (navData.links || []);
+          const mergedNav = {
+            ...defaultNavigation,
+            ...(typeof navData === 'object' && !Array.isArray(navData) ? navData : {}),
+            brandName: navData.brandName || setData?.brandName || defaultNavigation.brandName,
+            brandRole: navData.brandRole || setData?.brandRole || defaultNavigation.brandRole,
+            logoLetters: navData.logoLetters || (setData?.logoLetters ? setData.logoLetters.split('') : defaultNavigation.logoLetters),
+            resumeBtnText: navData.resumeBtnText || setData?.resumeBtnText || defaultNavigation.resumeBtnText,
+            talkBtnText: navData.talkBtnText || setData?.talkBtnText || defaultNavigation.talkBtnText,
+            links: links.map((l, idx) => ({
+              id: l.id,
+              label: l.label,
+              target: (l.url || l.target || '').replace(/^#/, ''),
+              url: l.url || `#${l.target}`,
+              order: Number(l.order) || idx + 1,
+              isVisible: l.isActive !== false && l.isVisible !== false,
+              isActive: l.isActive !== false && l.isVisible !== false,
+              openInNewTab: Boolean(l.openInNewTab),
+            })).sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0)),
+          };
+          setNavigation(mergedNav);
+        }
         if (heroData) setHero(heroData);
         if (footData) setFooter(footData);
       } catch (err) {
@@ -522,9 +556,26 @@ export const CMSProvider = ({ children }) => {
   // Settings actions
   const updateSettingsData = async (newSettings) => {
     const res = await settingsService.updateSettings(newSettings);
-    setSettings(newSettings);
-    saveState('settings', newSettings);
-    return res;
+    const updated = res?.data || res || newSettings;
+    const merged = { ...settings, ...newSettings, ...updated };
+    setSettings(merged);
+    saveState('settings', merged);
+    if (merged.siteTitle) {
+      document.title = merged.siteTitle;
+    }
+    setNavigation((prev) => ({
+      ...prev,
+      ...(merged.brandName && { brandName: merged.brandName }),
+      ...(merged.brandRole && { brandRole: merged.brandRole }),
+      ...(merged.logoLetters && {
+        logoLetters: Array.isArray(merged.logoLetters)
+          ? merged.logoLetters
+          : merged.logoLetters.split(''),
+      }),
+      ...(merged.resumeBtnText && { resumeBtnText: merged.resumeBtnText }),
+      ...(merged.talkBtnText && { talkBtnText: merged.talkBtnText }),
+    }));
+    return merged;
   };
 
   // About actions (Single Source of Truth: Backend Database -> React State, No localStorage)
@@ -559,9 +610,43 @@ export const CMSProvider = ({ children }) => {
   // Navigation actions
   const updateNavigationData = async (newNav) => {
     const res = await navigationService.updateNavigation(newNav);
-    setNavigation(newNav);
-    saveState('navigation', newNav);
-    return res;
+    const updated = res?.data || res || newNav;
+    const links = Array.isArray(updated.links)
+      ? updated.links
+      : Array.isArray(updated)
+        ? updated
+        : newNav.links || [];
+
+    const mergedNav = {
+      ...defaultNavigation,
+      ...newNav,
+      ...(typeof updated === 'object' && !Array.isArray(updated) ? updated : {}),
+      links: links.map((l, idx) => ({
+        id: l.id,
+        label: l.label,
+        target: (l.url || l.target || '').replace(/^#/, ''),
+        url: l.url || `#${l.target}`,
+        order: Number(l.order) || idx + 1,
+        isVisible: l.isActive !== false && l.isVisible !== false,
+        isActive: l.isActive !== false && l.isVisible !== false,
+        openInNewTab: Boolean(l.openInNewTab),
+      })).sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0)),
+    };
+
+    setNavigation(mergedNav);
+    saveState('navigation', mergedNav);
+
+    // If siteTitle was updated via navigation form, update settings and document.title
+    if (newNav.siteTitle) {
+      setSettings((prev) => {
+        const s = { ...prev, siteTitle: newNav.siteTitle };
+        saveState('settings', s);
+        return s;
+      });
+      document.title = newNav.siteTitle;
+    }
+
+    return mergedNav;
   };
 
   // Hero actions
