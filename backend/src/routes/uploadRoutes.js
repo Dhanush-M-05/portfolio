@@ -5,29 +5,14 @@ const router = express.Router();
 const { authenticate } = require('../middleware/authMiddleware');
 const fileService = require('../services/fileService');
 const resumeService = require('../services/resumeService');
-const { successResponse, errorResponse } = require('../utils/apiResponse');
+const { errorResponse } = require('../utils/apiResponse');
 
-// Storage configuration for generic uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const folder = ext === '.pdf' || ext === '.doc' || ext === '.docx' ? 'resumes' : 'profiles';
-    cb(null, path.resolve(__dirname, '../../uploads', folder));
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname).toLowerCase();
-    const sanitizedBase = path
-      .basename(file.originalname, ext)
-      .replace(/[^a-zA-Z0-9-_]/g, '_')
-      .slice(0, 40);
-    cb(null, `${sanitizedBase}-${uniqueSuffix}${ext}`);
-  },
-});
+// In-memory storage for direct Cloudinary streaming
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.svg', '.pdf', '.doc', '.docx'];
@@ -57,37 +42,51 @@ router.post('/', authenticate, (req, res) => {
     }
 
     const ext = path.extname(uploadedFile.originalname).toLowerCase();
-    const folder = ext === '.pdf' || ext === '.doc' || ext === '.docx' ? 'resumes' : 'profiles';
-    const fileUrl = fileService.getFileUrl(req, folder, uploadedFile.filename);
+    const isDoc = ext === '.pdf' || ext === '.doc' || ext === '.docx';
 
-    // If a PDF or document is uploaded via /api/upload, register it as active resume in the database
-    if (ext === '.pdf' || ext === '.doc' || ext === '.docx') {
-      try {
-        await resumeService.createResumeWithTransaction({
-          fileName: uploadedFile.filename,
-          fileUrl,
-          fileType: uploadedFile.mimetype || 'application/pdf',
-          fileSize: uploadedFile.size,
-          makeActive: true,
+    try {
+      let uploadResult;
+      if (isDoc) {
+        uploadResult = await fileService.uploadResume(uploadedFile);
+        // Register in resume table if a document was uploaded
+        try {
+          await resumeService.createResumeWithTransaction({
+            fileName: uploadResult.fileName,
+            fileUrl: uploadResult.url,
+            cloudinaryPublicId: uploadResult.publicId,
+            fileType: uploadResult.fileType || 'application/pdf',
+            fileSize: uploadResult.fileSize,
+            makeActive: true,
+          });
+        } catch (dbErr) {
+          console.warn('[UploadRoutes] Could not update active resume table:', dbErr.message);
+        }
+      } else {
+        uploadResult = await fileService.uploadImage(uploadedFile, {
+          folder: 'portfolio/profile',
         });
-      } catch (dbErr) {
-        console.warn('[UploadRoutes] Could not update active resume table:', dbErr.message);
       }
-    }
 
-    return res.status(200).json({
-      success: true,
-      message: 'File uploaded successfully',
-      fileUrl,
-      fileName: uploadedFile.filename,
-      data: {
-        fileUrl,
-        fileName: uploadedFile.filename,
-        fileSize: uploadedFile.size,
-        mimetype: uploadedFile.mimetype,
-      },
-    });
+      return res.status(200).json({
+        success: true,
+        message: 'File uploaded successfully to Cloudinary',
+        fileUrl: uploadResult.url,
+        fileName: uploadResult.fileName,
+        cloudinaryPublicId: uploadResult.publicId,
+        data: {
+          fileUrl: uploadResult.url,
+          fileName: uploadResult.fileName,
+          cloudinaryPublicId: uploadResult.publicId,
+          fileSize: uploadResult.fileSize,
+          mimetype: uploadResult.fileType,
+        },
+      });
+    } catch (uploadErr) {
+      console.error('[UploadRoutes] Cloudinary upload failed:', uploadErr.message);
+      return errorResponse(res, `Failed to upload file to Cloudinary: ${uploadErr.message}`, 500);
+    }
   });
 });
 
 module.exports = router;
+

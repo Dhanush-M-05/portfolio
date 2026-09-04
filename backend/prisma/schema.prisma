@@ -31,6 +31,9 @@ model Profile {
   phone                String?
   profileImageUrl      String?  @db.Text
   profileImageFileName String?
+  cloudinaryPublicId   String?
+  fileType             String?
+  fileSize             Int?
   bio                  String?  @db.Text
   shortBio             String?  @db.Text
   createdAt            DateTime @default(now())
@@ -121,11 +124,15 @@ model Project {
 }
 
 model ProjectImage {
-  id        Int      @id @default(autoincrement())
-  projectId Int
-  imageUrl  String   @db.Text
-  altText   String?
-  order     Int      @default(0)
+  id                 Int      @id @default(autoincrement())
+  projectId          Int
+  imageUrl           String   @db.Text
+  cloudinaryPublicId String?
+  fileName           String?
+  fileType           String?
+  fileSize           Int?
+  altText            String?
+  order              Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -179,10 +186,11 @@ model Certification {
   issueDate     String?
   credentialId  String?
   credentialUrl String?
-  fileUrl       String?  @db.Text
-  fileName      String?
-  fileType      String?
-  fileSize      Int?
+  fileUrl            String?  @db.Text
+  cloudinaryPublicId String?
+  fileName           String?
+  fileType           String?
+  fileSize           Int?
   order         Int      @default(0)
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
@@ -209,10 +217,11 @@ model Achievement {
 
 model Resume {
   id         Int      @id @default(autoincrement())
-  fileName   String
-  fileUrl    String   @db.Text
-  fileType   String   @default("application/pdf")
-  fileSize   Int
+  fileName           String
+  fileUrl            String   @db.Text
+  cloudinaryPublicId String?
+  fileType           String   @default("application/pdf")
+  fileSize           Int
   isActive   Boolean  @default(true)
   uploadedAt DateTime @default(now())
   updatedAt  DateTime @updatedAt

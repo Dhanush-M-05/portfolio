@@ -23,6 +23,11 @@ const environment = {
   SMTP_USER: process.env.SMTP_USER || '',
   SMTP_PASSWORD: process.env.SMTP_PASSWORD || '',
   CONTACT_RECEIVER_EMAIL: process.env.CONTACT_RECEIVER_EMAIL || 'dhanush2005mp@gmail.com',
+
+  // Cloudinary File Storage Configuration
+  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || '',
+  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY || '',
+  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET || '',
 };
 
 // Validate critical variables in production

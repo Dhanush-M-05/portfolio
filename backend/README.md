@@ -169,7 +169,29 @@ NODE_ENV="development"
 ADMIN_NAME="Dhanush M"
 ADMIN_EMAIL="dhanush2005mp@gmail.com"
 ADMIN_PASSWORD="CHANGE_THIS_PASSWORD"
+
+# Email Notification Configuration (SMTP)
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER="your-email@gmail.com"
+SMTP_PASSWORD="your-gmail-app-password"
+CONTACT_RECEIVER_EMAIL="dhanush2005mp@gmail.com"
+
+# Cloudinary Persistent File Storage Configuration
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
 ```
+
+### Cloudinary Storage Folders
+
+| Asset Type | Cloudinary Folder | Resource Type | Description |
+| :--- | :--- | :--- | :--- |
+| **Profile Photo** | `portfolio/profile` | `image` | Dhanush's avatar photo |
+| **Project Images** | `portfolio/projects` | `image` | Project screenshots and diagrams |
+| **Certifications** | `portfolio/certificates` | `raw` (PDF) / `image` | Course and certification credentials |
+| **Resume** | `portfolio/resume` | `raw` | Publicly downloadable & previewable PDF |
 
 > **Security Note:** Never commit `.env` to Git. `.env` is ignored by default in `.gitignore`.
 

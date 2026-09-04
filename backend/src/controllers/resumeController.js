@@ -51,36 +51,67 @@ async function getResume(req, res) {
 async function uploadResume(req, res) {
   let fileName;
   let fileUrl;
+  let cloudinaryPublicId = null;
   let fileType = 'application/pdf';
   let fileSize = 0;
 
   const uploadedFile = req.file || (req.files && req.files.length > 0 ? req.files[0] : null);
+  const previousActive = await resumeService.getActiveResume();
 
   if (uploadedFile) {
-    fileName = uploadedFile.filename;
-    fileUrl = fileService.getFileUrl(req, 'resumes', uploadedFile.filename);
-    fileType = uploadedFile.mimetype;
-    fileSize = uploadedFile.size;
+    // 1. Validate and upload PDF to Cloudinary (folder: portfolio/resume)
+    const uploadResult = await fileService.uploadResume(uploadedFile);
+    fileName = uploadResult.fileName;
+    fileUrl = uploadResult.url;
+    cloudinaryPublicId = uploadResult.publicId;
+    fileType = uploadResult.fileType;
+    fileSize = uploadResult.fileSize;
   } else if (req.body.fileUrl) {
-    // If uploaded directly via external storage URL
+    // If uploaded directly or provided via URL
     fileUrl = req.body.fileUrl;
+    cloudinaryPublicId = req.body.cloudinaryPublicId || null;
     fileName = req.body.fileName || 'Dhanush-M-Resume.pdf';
     fileSize = req.body.fileSize ? Number(req.body.fileSize) : 0;
+    fileType = req.body.fileType || 'application/pdf';
   } else {
     return errorResponse(res, 'A PDF resume file or fileUrl is required', 400);
   }
 
   const makeActive = req.body.isActive !== undefined ? Boolean(req.body.isActive) : true;
 
-  const newResume = await resumeService.createResumeWithTransaction({
-    fileName,
-    fileUrl,
-    fileType,
-    fileSize,
-    makeActive,
-  });
+  // 2. Save new Cloudinary URL/public ID and deactivate previous resume
+  let newResume;
+  try {
+    newResume = await resumeService.createResumeWithTransaction({
+      fileName,
+      fileUrl,
+      cloudinaryPublicId,
+      fileType,
+      fileSize,
+      makeActive,
+    });
+  } catch (dbError) {
+    // Rollback new Cloudinary file if database update fails
+    if (cloudinaryPublicId && uploadedFile) {
+      await fileService.deleteFile(cloudinaryPublicId, { resource_type: 'raw' }).catch((err) => {
+        console.warn('[Resume] Failed to rollback orphan Cloudinary file:', err.message);
+      });
+    }
+    throw dbError;
+  }
 
-  return successResponse(res, formatResume(newResume), 'Resume uploaded and activated successfully', 201);
+  // 3. Delete old Cloudinary file only after new upload succeeds and DB is committed
+  if (
+    makeActive &&
+    previousActive?.cloudinaryPublicId &&
+    previousActive.cloudinaryPublicId !== cloudinaryPublicId
+  ) {
+    fileService.deleteFile(previousActive.cloudinaryPublicId, { resource_type: 'raw' }).catch((err) => {
+      console.warn('[Resume] Failed to delete previous Cloudinary asset:', err.message);
+    });
+  }
+
+  return successResponse(res, formatResume(newResume), 'Resume uploaded and activated successfully via Cloudinary', 201);
 }
 
 /**
@@ -89,12 +120,13 @@ async function uploadResume(req, res) {
  */
 async function updateResume(req, res) {
   const { id } = req.params;
-  const { fileName, isActive, fileUrl } = req.body;
+  const { fileName, isActive, fileUrl, cloudinaryPublicId } = req.body;
 
   const updateData = {};
   if (fileName !== undefined) updateData.fileName = fileName;
   if (isActive !== undefined) updateData.isActive = Boolean(isActive);
   if (fileUrl !== undefined) updateData.fileUrl = fileUrl;
+  if (cloudinaryPublicId !== undefined) updateData.cloudinaryPublicId = cloudinaryPublicId;
 
   const updatedResume = await resumeService.updateResumeWithTransaction(id, updateData);
 
@@ -124,14 +156,8 @@ async function downloadResume(req, res) {
     return errorResponse(res, 'No resume available for download', 404);
   }
 
-  // Determine path or url to stream
-  let source = activeResume.fileUrl;
-  if (!fileService.isRemoteUrl(source) && activeResume.fileName) {
-    source = fileService.getLocalFilePath('resumes', activeResume.fileName);
-  }
-
   try {
-    const { stream, size } = await fileService.getFileStream(source);
+    const { stream, size } = await fileService.getFileStream(activeResume.fileUrl);
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'attachment; filename="Dhanush-M-Resume.pdf"');
@@ -157,14 +183,8 @@ async function viewResume(req, res) {
     return errorResponse(res, 'No resume available for preview', 404);
   }
 
-  // Determine path or url to stream
-  let source = activeResume.fileUrl;
-  if (!fileService.isRemoteUrl(source) && activeResume.fileName) {
-    source = fileService.getLocalFilePath('resumes', activeResume.fileName);
-  }
-
   try {
-    const { stream, size } = await fileService.getFileStream(source);
+    const { stream, size } = await fileService.getFileStream(activeResume.fileUrl);
 
     res.setHeader('Content-Type', activeResume.fileType || 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="Dhanush-M-Resume.pdf"');

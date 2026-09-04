@@ -4,6 +4,7 @@ import { useCMS } from '../../context/CMSContext';
 import FileUploader from '../../components/Admin/FileUploader/FileUploader';
 import Toast from '../../components/Admin/Toast/Toast';
 import { SparklesIcon, CheckIcon } from '../../components/Icons/Icons';
+import { uploadProfileImage, deleteProfileImage } from '../../services/profileApi';
 
 export const ManageProfile = () => {
   const { profile, updateProfile } = useCMS();
@@ -27,6 +28,7 @@ export const ManageProfile = () => {
   });
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
 
   const handleChange = (e) => {
@@ -34,20 +36,36 @@ export const ManageProfile = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handlePhotoSelect = (file) => {
+  const handlePhotoSelect = async (file) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const base64Url = e.target.result;
-      setFormData((prev) => ({ ...prev, avatarUrl: base64Url, image: base64Url }));
-      setToastMessage(`New photo "${file.name}" loaded! Click "Save Profile Changes" to publish.`);
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingPhoto(true);
+    setToastMessage('Uploading profile photo to Cloudinary...');
+    try {
+      const result = await uploadProfileImage(file);
+      const newUrl = result.profileImageUrl || result.url || result.data?.profileImageUrl;
+      setFormData((prev) => ({ ...prev, avatarUrl: newUrl, image: newUrl }));
+      updateProfile({ avatarUrl: newUrl, image: newUrl });
+      setToastMessage('Profile photo uploaded successfully to Cloudinary! Live on portfolio.');
+    } catch (err) {
+      setToastMessage('Failed to upload photo: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsUploadingPhoto(false);
+    }
   };
 
-  const handleResetPhoto = () => {
-    setFormData((prev) => ({ ...prev, avatarUrl: '/dhanush-profile.jpg', image: '/dhanush-profile.jpg' }));
-    setToastMessage('Reset profile photo to default portrait.');
+  const handleResetPhoto = async () => {
+    setIsUploadingPhoto(true);
+    try {
+      await deleteProfileImage();
+      const defaultAvatar = '/dhanush-profile.jpg';
+      setFormData((prev) => ({ ...prev, avatarUrl: defaultAvatar, image: defaultAvatar }));
+      updateProfile({ avatarUrl: defaultAvatar, image: defaultAvatar });
+      setToastMessage('Profile photo reset to default.');
+    } catch (err) {
+      setToastMessage('Failed to reset photo: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsUploadingPhoto(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -55,9 +73,9 @@ export const ManageProfile = () => {
     setIsSaving(true);
     try {
       await updateProfile(formData);
-      setToastMessage('Profile updated successfully! New photo and info are now live on the public landing page.');
+      setToastMessage('Profile updated successfully! Live on public portfolio.');
     } catch (err) {
-      setToastMessage('Failed to update profile: ' + err.message);
+      setToastMessage('Failed to update profile: ' + (err.response?.data?.message || err.message));
     } finally {
       setIsSaving(false);
     }
@@ -298,19 +316,46 @@ export const ManageProfile = () => {
                     onClick={handleResetPhoto}
                     className="admin-btn admin-btn-secondary"
                     style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                    disabled={isUploadingPhoto}
                   >
-                    Reset to Default Photo
+                    {isUploadingPhoto ? 'Processing...' : 'Reset to Default Photo'}
                   </button>
                 </div>
               </div>
 
-              {/* Drag & Drop / Click to Upload */}
+              {formData.avatarUrl && formData.avatarUrl.includes('cloudinary') && (
+                <div style={{
+                  background: '#EEF2FF',
+                  border: '1px solid #C7D2FE',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  marginBottom: '12px',
+                  fontSize: '0.75rem',
+                  color: '#4338CA',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '6px',
+                }}>
+                  <span style={{ fontWeight: 600 }}>☁️ Hosted on Cloudinary</span>
+                  <a
+                    href={formData.avatarUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#4F46E5', textDecoration: 'underline', fontSize: '0.72rem' }}
+                  >
+                    View Asset ↗
+                  </a>
+                </div>
+              )}
+
+              {/* Drag & Drop / Click to Upload to Cloudinary */}
               <FileUploader
-                label="Upload New Photo"
-                helpText="JPG, PNG, WebP or SVG (Max 5MB)"
+                label={isUploadingPhoto ? "Uploading to Cloudinary..." : "Upload New Photo to Cloudinary"}
+                helpText="JPG, PNG, WebP (Max 5MB) — Saved to portfolio/profile"
                 accept="image/*"
                 onFileSelect={handlePhotoSelect}
-                currentPreviewUrl={formData.avatarUrl ? 'Photo Loaded' : ''}
+                currentPreviewUrl={formData.avatarUrl ? 'Active Photo' : ''}
               />
 
               {/* Direct URL Alternative */}

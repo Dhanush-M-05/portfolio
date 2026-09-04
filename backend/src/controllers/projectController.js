@@ -231,6 +231,26 @@ async function updateProject(req, res) {
 async function deleteProject(req, res) {
   const { id } = req.params;
 
+  const project = await prisma.project.findUnique({
+    where: { id: Number(id) },
+    include: { images: true },
+  });
+
+  if (!project) {
+    return errorResponse(res, 'Project not found', 404);
+  }
+
+  // Delete all associated project images from Cloudinary
+  if (project.images && project.images.length > 0) {
+    for (const img of project.images) {
+      if (img.cloudinaryPublicId) {
+        await fileService.deleteFile(img.cloudinaryPublicId).catch((err) => {
+          console.warn(`[Project] Failed to delete Cloudinary asset ${img.cloudinaryPublicId}:`, err.message);
+        });
+      }
+    }
+  }
+
   await prisma.project.delete({
     where: { id: Number(id) },
   });
@@ -255,23 +275,49 @@ async function addProjectImage(req, res) {
   }
 
   let finalImageUrl = directImageUrl;
+  let cloudinaryPublicId = req.body.cloudinaryPublicId || null;
+  let fileName = req.body.fileName || null;
+  let fileType = req.body.fileType || null;
+  let fileSize = req.body.fileSize ? Number(req.body.fileSize) : null;
 
   if (req.file) {
-    finalImageUrl = fileService.getFileUrl(req, 'projects', req.file.filename);
+    const uploadResult = await fileService.uploadImage(req.file, {
+      folder: 'portfolio/projects',
+    });
+    finalImageUrl = uploadResult.url;
+    cloudinaryPublicId = uploadResult.publicId;
+    fileName = uploadResult.fileName;
+    fileType = uploadResult.fileType;
+    fileSize = uploadResult.fileSize;
   }
 
   if (!finalImageUrl) {
     return errorResponse(res, 'Image file or imageUrl is required', 400);
   }
 
-  const newImage = await prisma.projectImage.create({
-    data: {
-      projectId: Number(id),
-      imageUrl: finalImageUrl,
-      altText: altText || null,
-      order: order !== undefined ? Number(order) : 0,
-    },
-  });
+  let newImage;
+  try {
+    newImage = await prisma.projectImage.create({
+      data: {
+        projectId: Number(id),
+        imageUrl: finalImageUrl,
+        cloudinaryPublicId,
+        fileName,
+        fileType,
+        fileSize,
+        altText: altText || null,
+        order: order !== undefined ? Number(order) : 0,
+      },
+    });
+  } catch (dbError) {
+    // If DB fails and we uploaded to Cloudinary, rollback asset
+    if (cloudinaryPublicId && req.file) {
+      await fileService.deleteFile(cloudinaryPublicId).catch((err) => {
+        console.warn('[ProjectImage] Failed to rollback orphan Cloudinary file:', err.message);
+      });
+    }
+    throw dbError;
+  }
 
   return successResponse(res, newImage, 'Project image added successfully', 201);
 }
@@ -292,6 +338,20 @@ async function deleteProjectImage(req, res) {
 
   if (!projectImage) {
     return errorResponse(res, 'Project image not found', 404);
+  }
+
+  // Delete from Cloudinary first. If Cloudinary deletion fails, do not silently delete DB record.
+  if (projectImage.cloudinaryPublicId) {
+    try {
+      await fileService.deleteFile(projectImage.cloudinaryPublicId);
+    } catch (cloudErr) {
+      console.error('[ProjectImage] Cloudinary deletion failed:', cloudErr.message);
+      return errorResponse(
+        res,
+        'Failed to delete image from Cloudinary storage. Database record was not deleted.',
+        500
+      );
+    }
   }
 
   await prisma.projectImage.delete({

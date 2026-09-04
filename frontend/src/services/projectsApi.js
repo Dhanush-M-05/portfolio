@@ -39,10 +39,12 @@ export const deleteProject = async (id) => {
 };
 
 export const addProjectImage = async (id, formDataOrData) => {
-  const isFormData = formDataOrData instanceof FormData;
-  const response = await api.post(`/api/projects/${id}/images`, formDataOrData, {
-    headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
-  });
+  let payload = formDataOrData;
+  if (formDataOrData instanceof File || (typeof Blob !== 'undefined' && formDataOrData instanceof Blob)) {
+    payload = new FormData();
+    payload.append('image', formDataOrData);
+  }
+  const response = await api.post(`/api/projects/${id}/images`, payload);
   return response.data.data !== undefined ? response.data.data : response.data;
 };
 

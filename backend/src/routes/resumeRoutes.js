@@ -20,6 +20,12 @@ router.post(
   handleUpload(uploadResume.any()),
   asyncHandler(resumeController.uploadResume)
 );
+router.post(
+  '/upload',
+  authenticate,
+  handleUpload(uploadResume.any()),
+  asyncHandler(resumeController.uploadResume)
+);
 router.put('/:id', authenticate, updateResumeValidator, asyncHandler(resumeController.updateResume));
 router.delete('/:id', authenticate, asyncHandler(resumeController.deleteResume));
 

@@ -23,7 +23,7 @@ async function getActiveResume() {
 /**
  * Creates a new resume within a Prisma transaction, deactivating existing active resumes
  */
-async function createResumeWithTransaction({ fileName, fileUrl, fileType, fileSize, makeActive = true }) {
+async function createResumeWithTransaction({ fileName, fileUrl, cloudinaryPublicId, fileType, fileSize, makeActive = true }) {
   return prisma.$transaction(async (tx) => {
     if (makeActive) {
       await tx.resume.updateMany({
@@ -36,6 +36,7 @@ async function createResumeWithTransaction({ fileName, fileUrl, fileType, fileSi
       data: {
         fileName,
         fileUrl,
+        cloudinaryPublicId: cloudinaryPublicId || null,
         fileType: fileType || 'application/pdf',
         fileSize: fileSize || 0,
         isActive: makeActive,
@@ -84,16 +85,17 @@ async function deleteResume(id) {
     throw error;
   }
 
+  // Delete from Cloudinary if present
+  if (resume.cloudinaryPublicId) {
+    await fileService.deleteFile(resume.cloudinaryPublicId, { resource_type: 'raw' }).catch((err) => {
+      console.warn('[Resume] Failed to delete Cloudinary file:', err.message);
+    });
+  }
+
   // Delete DB record
   await prisma.resume.delete({
     where: { id: Number(id) },
   });
-
-  // Try to remove local file if it's in uploads
-  if (resume.fileName) {
-    const localPath = fileService.getLocalFilePath('resumes', resume.fileName);
-    await fileService.deleteLocalFile(localPath);
-  }
 
   // If the deleted resume was active, ensure the latest remaining resume is activated
   if (resume.isActive) {

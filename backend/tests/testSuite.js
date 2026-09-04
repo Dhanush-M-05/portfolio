@@ -3,6 +3,7 @@ const app = require('../src/app');
 const environment = require('../src/config/environment');
 const { prisma, connectDatabase, disconnectDatabase } = require('../src/config/database');
 const { setTransporter, escapeHtml } = require('../src/services/emailService');
+const fileService = require('../src/services/fileService');
 
 const TEST_PORT = 5099;
 let server;
@@ -12,8 +13,9 @@ let adminToken = '';
 async function request(path, options = {}) {
   const url = `http://localhost:${TEST_PORT}${path}`;
   const method = options.method || 'GET';
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   };
 
@@ -22,7 +24,9 @@ async function request(path, options = {}) {
     headers,
   };
 
-  if (options.body && typeof options.body === 'object') {
+  if (isFormData) {
+    fetchOptions.body = options.body;
+  } else if (options.body && typeof options.body === 'object') {
     fetchOptions.body = JSON.stringify(options.body);
   } else if (options.body) {
     fetchOptions.body = options.body;
@@ -299,6 +303,10 @@ async function runTests() {
 
     // 14. Resume CMS & PDF Download
     console.log('\n--- 14. Resume CMS & PDF Download Tests ---');
+    const existingActive = await prisma.resume.findFirst({ where: { isActive: true } });
+    if (!existingActive) {
+      await prisma.resume.updateMany({ where: { id: 1 }, data: { isActive: true } });
+    }
     const resumeRes = await request('/api/resume');
     assert(resumeRes.status === 200, 'GET /api/resume returns 200');
     assert(resumeRes.json?.data?.isActive === true, 'Active resume is returned');
@@ -479,6 +487,177 @@ async function runTests() {
     const notFoundRes = await request('/api/non-existent-endpoint-test');
     assert(notFoundRes.status === 404, 'Undefined route returns 404');
     assert(notFoundRes.json?.success === false, '404 response follows standard error format');
+
+    // 21. Cloudinary Persistent File Storage Tests
+    console.log('\n--- 21. Cloudinary Persistent File Storage Tests ---');
+
+    // 21.1 Unit test: uploadImage
+    const validPngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const dummyImageBuffer = Buffer.from(validPngBase64, 'base64');
+    const imageUploadResult = await fileService.uploadImage(dummyImageBuffer, {
+      fileName: 'profile_test.png',
+      fileType: 'image/png',
+      folder: 'portfolio/profile',
+    });
+    assert(typeof imageUploadResult.url === 'string' && imageUploadResult.url.length > 0, 'uploadImage returns valid URL');
+    assert(imageUploadResult.publicId.startsWith('portfolio/profile/'), 'uploadImage publicId targets portfolio/profile folder');
+    assert(imageUploadResult.fileName === 'profile_test.png', 'uploadImage preserves fileName');
+    assert(imageUploadResult.fileType === 'image/png', 'uploadImage preserves fileType');
+
+    // 21.2 Unit test: uploadCertificate
+    const validPdfBase64 = 'JVBERi0xLjQKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqIDIgMCBvYmo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iaiAzIDAgb2JqPDwvVHlwZS9QYWdlL01lZGlhQm94WzAgMCAzIDNdPj5lbmRvYmoKeHJlZgowIDQKMDAwMDAwMDAwMCA2NTUzNSBmCjAwMDAwMDAwMTAgMDAwMDAgbgowMDAwMDAwMDUzIDAwMDAwIG4KMDAwMDAwMDEwMiAwMDAwMCBuCnRyYWlsZXI8PC9TaXplIDQvUm9vdCAxIDAgUj4+CnN0YXJ0eHJlZgoxNDkKJSVFT0Y=';
+    const dummyCertPdfBuffer = Buffer.from(validPdfBase64, 'base64');
+    const certUploadResult = await fileService.uploadCertificate(dummyCertPdfBuffer, {
+      fileName: 'aws_solutions_architect.pdf',
+      fileType: 'application/pdf',
+    });
+    assert(typeof certUploadResult.url === 'string', 'uploadCertificate returns valid URL');
+    assert(certUploadResult.publicId.startsWith('portfolio/certificates/'), 'uploadCertificate publicId targets portfolio/certificates folder');
+
+    // 21.3 Unit test: uploadResume
+    const dummyResumePdfBuffer = Buffer.from(validPdfBase64, 'base64');
+    const resumeUploadResult = await fileService.uploadResume(dummyResumePdfBuffer, {
+      fileName: 'Dhanush-M-Resume.pdf',
+      fileType: 'application/pdf',
+    });
+    assert(typeof resumeUploadResult.url === 'string', 'uploadResume returns valid URL');
+    assert(resumeUploadResult.publicId.startsWith('portfolio/resume/'), 'uploadResume publicId targets portfolio/resume folder');
+
+    // Unit test: uploadResume rejects non-PDF files
+    let resumeRejected = false;
+    try {
+      await fileService.uploadResume(Buffer.from('not a pdf'), {
+        fileName: 'malicious.exe',
+        fileType: 'application/x-msdownload',
+      });
+    } catch (e) {
+      resumeRejected = true;
+    }
+    assert(resumeRejected, 'uploadResume strictly rejects non-PDF files');
+
+    // 21.4 Unit test: deleteFile
+    const deleteResult = await fileService.deleteFile(imageUploadResult.publicId);
+    assert(deleteResult?.result === 'ok', 'deleteFile returns successful status');
+
+    // 21.5 Integration: Multipart Profile Image Upload & Delete via API
+    const profileFormData = new FormData();
+    profileFormData.append('image', new Blob([dummyImageBuffer], { type: 'image/png' }), 'test-avatar.png');
+    const uploadProfileRes = await request('/api/profile/image', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: profileFormData,
+    });
+    assert(uploadProfileRes.status === 200, 'POST /api/profile/image with multipart returns 200');
+    assert(uploadProfileRes.json?.data?.cloudinaryPublicId?.startsWith('portfolio/profile/'), 'Profile image saved with portfolio/profile Cloudinary public ID');
+    assert(uploadProfileRes.json?.data?.imageUrl?.includes('cloudinary.com') || uploadProfileRes.json?.data?.imageUrl?.startsWith('http'), 'Profile imageUrl updated to Cloudinary URL');
+
+    // Delete profile image via API
+    const deleteProfileImgRes = await request('/api/profile/image', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert(deleteProfileImgRes.status === 200, 'DELETE /api/profile/image returns 200');
+    assert(deleteProfileImgRes.json?.data?.imageUrl === null, 'Profile imageUrl reset to null');
+    assert(deleteProfileImgRes.json?.data?.cloudinaryPublicId === null, 'Profile cloudinaryPublicId reset to null');
+
+    // 21.6 Integration: Multipart Project Screenshot Upload & Delete via API
+    const tempProjRes = await request('/api/projects', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: {
+        title: 'Cloudinary Test Project',
+        shortDescription: 'Project created to verify Cloudinary multi-image uploads.',
+        description: 'A comprehensive full-stack testing project with Cloudinary image storage.',
+        technologies: ['Node.js', 'Cloudinary'],
+      },
+    });
+    assert(tempProjRes.status === 201, 'Created temp project for Cloudinary test');
+    const tempProjId = tempProjRes.json?.data?.id;
+
+    // Upload project image via multipart
+    const projImgFormData = new FormData();
+    projImgFormData.append('image', new Blob([dummyImageBuffer], { type: 'image/jpeg' }), 'project-screen.jpg');
+    projImgFormData.append('altText', 'Cloud Architecture Screenshot');
+    const uploadProjImgRes = await request(`/api/projects/${tempProjId}/images`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: projImgFormData,
+    });
+    assert(uploadProjImgRes.status === 201, 'POST /api/projects/:id/images with multipart returns 201');
+    assert(uploadProjImgRes.json?.data?.cloudinaryPublicId?.startsWith('portfolio/projects/'), 'Project image has portfolio/projects Cloudinary public ID');
+    assert(uploadProjImgRes.json?.data?.fileName === 'project-screen.jpg', 'Project image metadata preserves original fileName');
+    const projImgId = uploadProjImgRes.json?.data?.id;
+
+    // Delete project image via API
+    const deleteProjImgRes = await request(`/api/projects/${tempProjId}/images/${projImgId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert(deleteProjImgRes.status === 200, 'DELETE /api/projects/:id/images/:imageId returns 200');
+
+    // Clean up temp project
+    await request(`/api/projects/${tempProjId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+
+    // 21.7 Integration: Multipart Certificate Creation with Mandatory File Upload
+    const certFormData = new FormData();
+    certFormData.append('title', 'Certified Kubernetes Administrator');
+    certFormData.append('issuer', 'Linux Foundation');
+    certFormData.append('issueDate', '2026');
+    certFormData.append('certificateFile', new Blob([dummyCertPdfBuffer], { type: 'application/pdf' }), 'cka_cert.pdf');
+
+    const createCertWithFileRes = await request('/api/certifications', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: certFormData,
+    });
+    assert(createCertWithFileRes.status === 201, 'POST /api/certifications with file returns 201 Created');
+    assert(createCertWithFileRes.json?.data?.cloudinaryPublicId?.startsWith('portfolio/certificates/'), 'Certificate stored with portfolio/certificates Cloudinary public ID');
+    assert(createCertWithFileRes.json?.data?.fileName === 'cka_cert.pdf', 'Certificate fileName is saved in MySQL');
+    const createdCertId = createCertWithFileRes.json?.data?.id;
+
+    // Stream uploaded certificate inline
+    const viewCertRes = await request(`/api/certifications/${createdCertId}/view`);
+    assert(viewCertRes.status === 200 || viewCertRes.status === 302, 'GET /api/certifications/:id/view succeeds');
+
+    // Clean up created certificate
+    const deleteCertRes = await request(`/api/certifications/${createdCertId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    assert(deleteCertRes.status === 200, 'DELETE /api/certifications/:id cleans up Cloudinary cert asset');
+
+    // 21.8 Integration: Multipart Resume Upload & Deactivation Transaction
+    const resumeFormData = new FormData();
+    resumeFormData.append('resume', new Blob([dummyResumePdfBuffer], { type: 'application/pdf' }), 'Dhanush-M-Resume.pdf');
+    resumeFormData.append('isActive', 'true');
+
+    const uploadResumeRes = await request('/api/resume/upload', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` },
+      body: resumeFormData,
+    });
+    assert(uploadResumeRes.status === 201, 'POST /api/resume/upload with multipart PDF returns 201 Created');
+    assert(uploadResumeRes.json?.data?.isActive === true, 'Uploaded resume is active');
+    assert(uploadResumeRes.json?.data?.cloudinaryPublicId?.startsWith('portfolio/resume/'), 'Resume stored with portfolio/resume Cloudinary public ID');
+    const uploadedResumeId = uploadResumeRes.json?.data?.id;
+
+    // Test GET /api/resume/download delivers genuine PDF attachment
+    const downloadResumeRes = await request('/api/resume/download');
+    assert(downloadResumeRes.status === 200, 'GET /api/resume/download returns 200');
+    assert(downloadResumeRes.headers.get('content-type')?.includes('application/pdf'), 'Download Content-Type is application/pdf');
+    assert(downloadResumeRes.headers.get('content-disposition')?.includes('attachment'), 'Download Content-Disposition is attachment');
+
+    // Clean up test resume record
+    if (uploadedResumeId) {
+      await prisma.resume.delete({ where: { id: uploadedResumeId } });
+    }
+    const postActiveCheck = await prisma.resume.findFirst({ where: { isActive: true } });
+    if (!postActiveCheck) {
+      await prisma.resume.updateMany({ where: { id: 1 }, data: { isActive: true } });
+    }
 
   } catch (err) {
     console.error('Unhandled test failure:', err);

@@ -6,6 +6,8 @@ import Modal from '../../components/Admin/Modal/Modal';
 import ConfirmDialog from '../../components/Admin/ConfirmDialog/ConfirmDialog';
 import FileUploader from '../../components/Admin/FileUploader/FileUploader';
 import Toast from '../../components/Admin/Toast/Toast';
+import { TrashIcon, ExternalLinkIcon } from '../../components/Icons/Icons';
+import { addProjectImage, deleteProjectImage } from '../../services/projectsApi';
 
 export const ManageProjects = () => {
   const { projects, addProject, updateProject, deleteProject } = useCMS();
@@ -16,6 +18,9 @@ export const ManageProjects = () => {
   const [deletingProject, setDeletingProject] = useState(null);
   const [toastMessage, setToastMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [projectImages, setProjectImages] = useState([]);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const initialFormState = {
     title: '',
@@ -38,6 +43,8 @@ export const ManageProjects = () => {
   const handleOpenAddModal = () => {
     setEditingProject(null);
     setFormData(initialFormState);
+    setSelectedFile(null);
+    setProjectImages([]);
     setIsModalOpen(true);
   };
 
@@ -58,6 +65,8 @@ export const ManageProjects = () => {
       liveUrl: proj.liveUrl || '',
       featured: Boolean(proj.featured),
     });
+    setSelectedFile(null);
+    setProjectImages(proj.images || []);
     setIsModalOpen(true);
   };
 
@@ -81,6 +90,37 @@ export const ManageProjects = () => {
     }
   };
 
+  const handleUploadProjectImage = async (file) => {
+    if (!file) return;
+    if (editingProject) {
+      setIsUploadingImage(true);
+      setToastMessage('Uploading project screenshot to Cloudinary...');
+      try {
+        const newImg = await addProjectImage(editingProject.id, file);
+        setProjectImages((prev) => [...prev, newImg]);
+        setToastMessage('Image uploaded to Cloudinary and added to project!');
+      } catch (err) {
+        setToastMessage('Failed to upload image: ' + (err.response?.data?.message || err.message));
+      } finally {
+        setIsUploadingImage(false);
+      }
+    } else {
+      setSelectedFile(file);
+      setToastMessage(`Selected "${file.name}" for upload upon publishing.`);
+    }
+  };
+
+  const handleDeleteProjectImage = async (imageId) => {
+    if (!editingProject) return;
+    try {
+      await deleteProjectImage(editingProject.id, imageId);
+      setProjectImages((prev) => prev.filter((img) => img.id !== imageId));
+      setToastMessage('Project image deleted from Cloudinary.');
+    } catch (err) {
+      setToastMessage('Failed to delete image: ' + (err.response?.data?.message || err.message));
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSaving(true);
@@ -97,8 +137,15 @@ export const ManageProjects = () => {
         await updateProject(editingProject.id || editingProject.slug, projectPayload);
         setToastMessage(`Project "${formData.title}" updated successfully.`);
       } else {
-        await addProject(projectPayload);
-        setToastMessage(`Project "${formData.title}" added to portfolio!`);
+        const created = await addProject(projectPayload);
+        if (selectedFile && created?.id) {
+          try {
+            await addProjectImage(created.id, selectedFile);
+          } catch (uploadErr) {
+            console.warn('Could not upload initial project cover image:', uploadErr.message);
+          }
+        }
+        setToastMessage(`Project "${formData.title}" created with Cloudinary storage!`);
       }
       setIsModalOpen(false);
     } catch (err) {
@@ -353,11 +400,98 @@ export const ManageProjects = () => {
           </div>
 
           <div className="admin-form-group">
-            <label className="admin-form-label">Project Screenshot / Asset</label>
+            <label className="admin-form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Project Screenshots & Cloudinary Media</span>
+              {projectImages.length > 0 && (
+                <span style={{ fontSize: '0.75rem', color: '#4F46E5', fontWeight: 600 }}>
+                  ☁️ {projectImages.length} {projectImages.length === 1 ? 'Image' : 'Images'} Stored
+                </span>
+              )}
+            </label>
+
+            {/* Gallery of Uploaded Project Images */}
+            {projectImages.length > 0 && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                gap: '10px',
+                marginBottom: '12px',
+                padding: '10px',
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '8px',
+              }}>
+                {projectImages.map((img) => (
+                  <div
+                    key={img.id || img.imageUrl}
+                    style={{
+                      position: 'relative',
+                      borderRadius: '6px',
+                      overflow: 'hidden',
+                      border: '1px solid #CBD5E1',
+                      background: '#FFFFFF',
+                      height: '80px',
+                    }}
+                  >
+                    <img
+                      src={img.imageUrl}
+                      alt={img.altText || 'Project screenshot'}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                    <div style={{
+                      position: 'absolute',
+                      top: '4px',
+                      right: '4px',
+                      display: 'flex',
+                      gap: '4px',
+                    }}>
+                      <a
+                        href={img.imageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.7)',
+                          color: '#FFFFFF',
+                          borderRadius: '4px',
+                          padding: '2px 4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                        title="View Full Size"
+                      >
+                        <ExternalLinkIcon size={10} />
+                      </a>
+                      {editingProject && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProjectImage(img.id)}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.85)',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '2px 4px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
+                          title="Delete from Cloudinary"
+                        >
+                          <TrashIcon size={10} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <FileUploader
-              label="Upload Project Screenshot"
-              helpText="PNG or WebP (Max 5MB)"
-              onFileSelect={(file) => setToastMessage(`Selected ${file.name} for project cover.`)}
+              key={editingProject ? `edit-${editingProject.id}-${projectImages.length}` : 'new-proj-img'}
+              label={isUploadingImage ? "Uploading to Cloudinary..." : editingProject ? "Upload Additional Screenshot to Cloudinary" : "Upload Project Screenshot (Cloudinary)"}
+              helpText="JPG, PNG, WebP (Max 10MB) — Uploaded to portfolio/projects"
+              accept="image/*"
+              onFileSelect={handleUploadProjectImage}
             />
           </div>
 

@@ -1,39 +1,8 @@
 const path = require('path');
-const fs = require('fs');
 const multer = require('multer');
 
-// Base upload path
-const UPLOAD_ROOT = path.resolve(__dirname, '../../uploads');
-
-// Ensure upload directories exist
-const uploadDirs = ['resumes', 'certifications', 'profiles', 'projects'];
-uploadDirs.forEach((dir) => {
-  const fullPath = path.join(UPLOAD_ROOT, dir);
-  if (!fs.existsSync(fullPath)) {
-    fs.mkdirSync(fullPath, { recursive: true });
-  }
-});
-
-/**
- * Configure disk storage for a specific folder
- */
-function createStorage(subfolder) {
-  return multer.diskStorage({
-    destination: (req, file, cb) => {
-      const destinationPath = path.join(UPLOAD_ROOT, subfolder);
-      cb(null, destinationPath);
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      const ext = path.extname(file.originalname).toLowerCase();
-      const sanitizedBase = path
-        .basename(file.originalname, ext)
-        .replace(/[^a-zA-Z0-9-_]/g, '_')
-        .slice(0, 40);
-      cb(null, `${sanitizedBase}-${uniqueSuffix}${ext}`);
-    },
-  });
-}
+// Memory storage keeps file buffers in memory for direct streaming to Cloudinary
+const storage = multer.memoryStorage();
 
 /**
  * Filter for resume: ONLY PDF allowed
@@ -48,10 +17,10 @@ function resumeFileFilter(req, file, cb) {
     'application/octet-stream',
   ];
   const ext = path.extname(file.originalname).toLowerCase();
+  const isMimeValid = allowedMimes.includes(file.mimetype) || file.mimetype.includes('pdf');
+  const isExtValid = ext === '.pdf';
 
-  if ((allowedMimes.includes(file.mimetype) || file.mimetype.includes('pdf')) && ext === '.pdf') {
-    cb(null, true);
-  } else if (ext === '.pdf') {
+  if (isMimeValid && isExtValid) {
     cb(null, true);
   } else {
     const error = new Error('Invalid file type. Only PDF files are allowed for resumes.');
@@ -60,6 +29,9 @@ function resumeFileFilter(req, file, cb) {
   }
 }
 
+/**
+ * Filter for certificates: PDF, JPG, JPEG, PNG allowed
+ */
 function certificationFileFilter(req, file, cb) {
   const allowedMimes = [
     'application/pdf',
@@ -71,10 +43,10 @@ function certificationFileFilter(req, file, cb) {
   ];
   const allowedExts = ['.pdf', '.jpg', '.jpeg', '.png'];
   const ext = path.extname(file.originalname).toLowerCase();
+  const isMimeValid = allowedMimes.includes(file.mimetype) || file.mimetype.includes('pdf') || file.mimetype.includes('image');
+  const isExtValid = allowedExts.includes(ext);
 
-  if ((allowedMimes.includes(file.mimetype) || file.mimetype.includes('pdf') || file.mimetype.includes('image')) && allowedExts.includes(ext)) {
-    cb(null, true);
-  } else if (allowedExts.includes(ext)) {
+  if (isMimeValid && isExtValid) {
     cb(null, true);
   } else {
     const error = new Error(
@@ -86,7 +58,7 @@ function certificationFileFilter(req, file, cb) {
 }
 
 /**
- * Filter for images (Profile, Project thumbnail/images): JPG, JPEG, PNG, WEBP
+ * Filter for images (Profile, Project): JPG, JPEG, PNG, WEBP
  */
 function imageFileFilter(req, file, cb) {
   const allowedMimes = [
@@ -97,8 +69,10 @@ function imageFileFilter(req, file, cb) {
   ];
   const allowedExts = ['.jpg', '.jpeg', '.png', '.webp'];
   const ext = path.extname(file.originalname).toLowerCase();
+  const isMimeValid = allowedMimes.includes(file.mimetype);
+  const isExtValid = allowedExts.includes(ext);
 
-  if (allowedMimes.includes(file.mimetype) && allowedExts.includes(ext)) {
+  if (isMimeValid && isExtValid) {
     cb(null, true);
   } else {
     const error = new Error(
@@ -109,35 +83,35 @@ function imageFileFilter(req, file, cb) {
   }
 }
 
-// Multer upload instances
+// Multer upload instances using in-memory buffer storage for direct Cloudinary streaming
 const uploadResume = multer({
-  storage: createStorage('resumes'),
+  storage,
   fileFilter: resumeFileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
 const uploadCertification = multer({
-  storage: createStorage('certifications'),
+  storage,
   fileFilter: certificationFileFilter,
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB limit
 });
 
 const uploadProfileImage = multer({
-  storage: createStorage('profiles'),
+  storage,
   fileFilter: imageFileFilter,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
 const uploadProjectImage = multer({
-  storage: createStorage('projects'),
+  storage,
   fileFilter: imageFileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
 module.exports = {
-  UPLOAD_ROOT,
   uploadResume,
   uploadCertification,
   uploadProfileImage,
   uploadProjectImage,
 };
+
