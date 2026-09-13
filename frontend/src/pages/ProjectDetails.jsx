@@ -1,19 +1,53 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { GithubIcon, ExternalLinkIcon, CheckIcon } from '../components/Icons/Icons';
 import Button from '../components/Button/Button';
 import { useCMS } from '../context/CMSContext';
+import { getProjectBySlug } from '../services/projectsApi';
 import './ProjectDetails.css';
 
 export const ProjectDetails = () => {
   const { slug } = useParams();
   const { projects } = useCMS();
+  const [fetchedProject, setFetchedProject] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     window.scrollTo(0, 0);
+    let isMounted = true;
+    setIsLoading(true);
+
+    getProjectBySlug(slug)
+      .then((data) => {
+        if (isMounted) {
+          setFetchedProject(data);
+          setIsLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('API getProjectBySlug notice, checking context:', err.message);
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [slug]);
 
-  const project = projects.find((p) => p.slug === slug || p.id === slug);
+  const project = fetchedProject || projects.find((p) => p.slug === slug || p.id === slug);
+
+  if (isLoading && !project) {
+    return (
+      <main className="project-not-found container">
+        <div className="not-found-glass-card">
+          <h2>Loading Project...</h2>
+          <p>Fetching project details from server...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!project) {
     return (
@@ -32,7 +66,7 @@ export const ProjectDetails = () => {
   // Find next and previous projects for navigation
   const currentIndex = projects.findIndex((p) => p.slug === slug || p.id === slug);
   const prevProject = currentIndex > 0 ? projects[currentIndex - 1] : null;
-  const nextProject = currentIndex < projects.length - 1 ? projects[currentIndex + 1] : null;
+  const nextProject = currentIndex >= 0 && currentIndex < projects.length - 1 ? projects[currentIndex + 1] : null;
 
   return (
     <main className="project-detail-page">

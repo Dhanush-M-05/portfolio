@@ -1,58 +1,43 @@
-const rateLimit = require('express-rate-limit');
-const { errorResponse } = require('../utils/apiResponse');
+import rateLimit from 'express-rate-limit';
 
-/**
- * Standard handler for rate limit exceeded
- */
-function rateLimitHandler(message) {
-  return (req, res) => {
-    return errorResponse(res, message, 429);
-  };
-}
-
-const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
-
-/**
- * General API rate limiter
- */
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: isDev ? 50000 : 1000,
-  skip: (req) => {
-    // Never rate-limit resume downloads, previews, views, or health checks
-    const p = req.originalUrl || req.path || '';
-    return p.includes('/resume/download') || p.includes('/resume/view') || p.includes('/resume/preview') || p.includes('/health');
+// Limiter for admin authentication attempts
+export const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many authentication attempts from this IP, please try again after 15 minutes.',
   },
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: rateLimitHandler('Too many requests from this IP. Please try again after 15 minutes.'),
 });
 
-/**
- * Strict login rate limiter: 10 login attempts per 15 minutes to prevent brute-force attacks
- */
-const authLimiter = rateLimit({
+// Limiter for public contact form submissions
+export const contactLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 15, // 15 submissions per hour
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many messages sent from this IP, please try again later.',
+  },
+});
+
+// General public API limiter
+export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
-  skipSuccessfulRequests: true,
+  max: 600, // 600 requests per 15 minutes
   standardHeaders: true,
   legacyHeaders: false,
-  handler: rateLimitHandler('Too many failed login attempts. Please try again after 15 minutes.'),
+  message: {
+    success: false,
+    message: 'Too many requests, please slow down.',
+  },
 });
 
-/**
- * Contact form rate limiter: 5 submissions per 15 minutes to prevent spam
- */
-const contactLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: rateLimitHandler('Too many contact messages sent. Please wait 15 minutes before sending another.'),
-});
-
-module.exports = {
-  apiLimiter,
+export default {
   authLimiter,
   contactLimiter,
+  apiLimiter,
 };

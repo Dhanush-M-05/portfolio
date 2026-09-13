@@ -1,20 +1,16 @@
-const { body } = require('express-validator');
-const { validate } = require('../middleware/validationMiddleware');
+export const validateResumeMeta = (data) => {
+  const errors = {};
 
-const updateResumeValidator = [
-  body('fileName')
-    .optional()
-    .trim()
-    .notEmpty()
-    .withMessage('File name cannot be empty'),
-  body('isActive')
-    .optional()
-    .isBoolean()
-    .withMessage('isActive must be a boolean')
-    .toBoolean(),
-  validate,
-];
+  if (data.title && typeof data.title !== 'string') {
+    errors.title = 'Title must be a string';
+  }
 
-module.exports = {
-  updateResumeValidator,
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+};
+
+export default {
+  validateResumeMeta,
 };

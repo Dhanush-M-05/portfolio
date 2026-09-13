@@ -1,159 +1,144 @@
-const { prisma } = require('../config/database');
-const {
-  successResponse,
-  errorResponse,
-  paginatedResponse,
-} = require('../utils/apiResponse');
-const { sendContactNotification } = require('../services/emailService');
+import prisma from '../config/database.js';
+import emailService from '../services/emailService.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Public endpoint to submit a contact message
+ * Submit Contact Message
  * POST /api/contact
  */
-async function submitContactMessage(req, res) {
+export const submitContact = async (req, res) => {
   const { name, email, subject, message } = req.body;
 
-  // Step 2: Save the message into MySQL ContactMessage table
-  const newMessage = await prisma.contactMessage.create({
+  if (!name || !email || !message) {
+    return errorResponse(res, 400, 'Name, email, and message are required');
+  }
+
+  // 1. Save message to MySQL
+  const contactRecord = await prisma.contactMessage.create({
     data: {
       name: name.trim(),
-      email: email.trim().toLowerCase(),
-      subject: subject.trim(),
+      email: email.trim(),
+      subject: (subject || 'General Inquiry').trim(),
       message: message.trim(),
       isRead: false,
     },
   });
 
-  // Step 3: Send an email notification to CONTACT_RECEIVER_EMAIL
-  let emailDelivery = { delivered: false };
-  try {
-    emailDelivery = await sendContactNotification({
-      name: newMessage.name,
-      email: newMessage.email,
-      subject: newMessage.subject,
-      message: newMessage.message,
-      createdAt: newMessage.createdAt,
-    });
-  } catch (emailError) {
-    // Safely log error without leaking credentials or internal details
-    console.error('[ContactController] Email delivery exception:', emailError.message);
-  }
+  // 2. Send notification email asynchronously via Resend
+  emailService.sendContactNotificationEmail({
+    name: contactRecord.name,
+    email: contactRecord.email,
+    subject: contactRecord.subject,
+    message: contactRecord.message,
+    createdAt: contactRecord.createdAt,
+  }).catch((err) => {
+    console.error('Email dispatch error (message saved safely in database):', err);
+  });
 
-  // Step 4: Return response indicating message status
-  // Database save is preserved regardless of SMTP delivery status
-  const responseMessage = emailDelivery.delivered
-    ? 'Message sent successfully'
-    : 'Your message was received and saved successfully, but the email notification could not be delivered at this time.';
-
-  return successResponse(
-    res,
-    {
-      id: newMessage.id,
-      name: newMessage.name,
-      email: newMessage.email,
-      subject: newMessage.subject,
-      createdAt: newMessage.createdAt,
-      emailDelivered: Boolean(emailDelivery.delivered),
-    },
-    responseMessage,
-    201
-  );
-}
+  return successResponse(res, 201, 'Thank you! Your message has been sent successfully.', {
+    id: contactRecord.id,
+    name: contactRecord.name,
+    email: contactRecord.email,
+  });
+};
 
 /**
- * Admin: Get all contact messages with pagination & filter
+ * Get Contact Messages (Admin)
  * GET /api/contact
  */
-async function getContactMessages(req, res) {
-  const { page, limit, isRead } = req.query;
+export const getMessages = async (req, res) => {
+  const { isRead, page, limit } = req.query;
 
   const where = {};
   if (isRead !== undefined) {
     where.isRead = isRead === 'true';
   }
 
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
-  const skip = (pageNum - 1) * limitNum;
+  const take = limit ? parseInt(limit, 10) : undefined;
+  const skip = page && limit ? (parseInt(page, 10) - 1) * take : undefined;
 
-  const [total, messages] = await Promise.all([
-    prisma.contactMessage.count({ where }),
+  const [messages, total, unreadCount] = await Promise.all([
     prisma.contactMessage.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       skip,
-      take: limitNum,
+      take,
     }),
+    prisma.contactMessage.count({ where }),
+    prisma.contactMessage.count({ where: { isRead: false } }),
   ]);
 
-  return paginatedResponse(
-    res,
+  return res.status(200).json({
+    success: true,
+    message: 'Messages retrieved',
+    data: messages,
     messages,
     total,
-    pageNum,
-    limitNum,
-    'Contact messages retrieved successfully'
-  );
-}
+    unreadCount,
+    page: page ? parseInt(page, 10) : 1,
+  });
+};
 
 /**
- * Admin: Get single contact message by ID
+ * Get Message by ID (Admin)
  * GET /api/contact/:id
  */
-async function getContactMessageById(req, res) {
+export const getMessageById = async (req, res) => {
   const { id } = req.params;
 
   const message = await prisma.contactMessage.findUnique({
-    where: { id: Number(id) },
+    where: { id },
   });
 
   if (!message) {
-    return errorResponse(res, 'Contact message not found', 404);
+    return errorResponse(res, 404, 'Message not found');
   }
 
-  return successResponse(res, message, 'Contact message retrieved successfully');
-}
+  return successResponse(res, 200, 'Message retrieved', message);
+};
 
 /**
- * Admin: Mark message as read/unread
+ * Mark Message as Read/Unread (Admin)
  * PATCH /api/contact/:id/read
  */
-async function markMessageAsRead(req, res) {
+export const markMessageRead = async (req, res) => {
   const { id } = req.params;
-  const { isRead } = req.body;
+  const isRead = req.body.isRead !== undefined ? Boolean(req.body.isRead) : true;
 
-  const updatedMessage = await prisma.contactMessage.update({
-    where: { id: Number(id) },
-    data: {
-      isRead: isRead !== undefined ? Boolean(isRead) : true,
-    },
+  const existing = await prisma.contactMessage.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Message not found');
+  }
+
+  const updated = await prisma.contactMessage.update({
+    where: { id },
+    data: { isRead },
   });
 
-  return successResponse(
-    res,
-    updatedMessage,
-    `Message marked as ${updatedMessage.isRead ? 'read' : 'unread'}`
-  );
-}
+  return successResponse(res, 200, `Message marked as ${isRead ? 'read' : 'unread'}`, updated);
+};
 
 /**
- * Admin: Delete contact message
+ * Delete Contact Message (Admin)
  * DELETE /api/contact/:id
  */
-async function deleteContactMessage(req, res) {
+export const deleteMessage = async (req, res) => {
   const { id } = req.params;
 
-  await prisma.contactMessage.delete({
-    where: { id: Number(id) },
-  });
+  const existing = await prisma.contactMessage.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Message not found');
+  }
 
-  return successResponse(res, null, 'Contact message deleted successfully');
-}
+  await prisma.contactMessage.delete({ where: { id } });
 
-module.exports = {
-  submitContactMessage,
-  getContactMessages,
-  getContactMessageById,
-  markMessageAsRead,
-  deleteContactMessage,
+  return successResponse(res, 200, 'Message deleted successfully');
+};
+
+export default {
+  submitContact,
+  getMessages,
+  getMessageById,
+  markMessageRead,
+  deleteMessage,
 };

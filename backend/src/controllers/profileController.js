@@ -1,163 +1,158 @@
-const { prisma } = require('../config/database');
-const fileService = require('../services/fileService');
-const { successResponse, errorResponse } = require('../utils/apiResponse');
-
-/**
- * Helper to get or create the singleton profile
- */
-async function getOrCreateProfile() {
-  let profile = await prisma.profile.findFirst();
-  if (!profile) {
-    profile = await prisma.profile.create({
-      data: {
-        name: 'Dhanush M',
-        title: 'Full Stack Developer',
-      },
-    });
-  }
-  return profile;
-}
+import prisma from '../config/database.js';
+import cloudinaryService from '../services/cloudinaryService.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
  * Get Profile
  * GET /api/profile
  */
-async function getProfile(req, res) {
-  const profile = await getOrCreateProfile();
-  return successResponse(res, profile, 'Profile retrieved successfully');
-}
+export const getProfile = async (req, res) => {
+  let profile = await prisma.profile.findFirst();
+
+  if (!profile) {
+    profile = await prisma.profile.create({
+      data: {
+        name: 'Dhanush M',
+        role: 'Web Developer',
+        title: 'Full Stack Developer',
+        degree: 'B.E.',
+        department: 'Computer Science and Engineering',
+        college: 'J.N.N Institute of Engineering',
+        location: 'Chennai, India',
+        avatarUrl: '/dhanush-profile.jpg',
+      },
+    });
+  }
+
+  // Ensure both avatarUrl and image properties are populated for frontend compatibility
+  const responseData = {
+    ...profile,
+    image: profile.avatarUrl,
+  };
+
+  return successResponse(res, 200, 'Profile retrieved', responseData);
+};
 
 /**
  * Update Profile
  * PUT /api/profile
  */
-async function updateProfile(req, res) {
-  const existing = await getOrCreateProfile();
+export const updateProfile = async (req, res) => {
+  let profile = await prisma.profile.findFirst();
+  const updateData = { ...req.body };
 
-  const allowedFields = [
-    'name',
-    'title',
-    'college',
-    'department',
-    'course',
-    'location',
-    'email',
-    'phone',
-    'profileImageUrl',
-    'profileImageFileName',
-    'bio',
-    'shortBio',
-  ];
+  // Delete non-field or system properties
+  delete updateData.id;
+  delete updateData.createdAt;
+  delete updateData.updatedAt;
 
-  const updateData = {};
-  for (const field of allowedFields) {
-    if (req.body[field] !== undefined) {
-      updateData[field] = req.body[field];
-    }
+  if (updateData.image && !updateData.avatarUrl) {
+    updateData.avatarUrl = updateData.image;
+  }
+  delete updateData.image;
+
+  let updated;
+  if (profile) {
+    updated = await prisma.profile.update({
+      where: { id: profile.id },
+      data: updateData,
+    });
+  } else {
+    updated = await prisma.profile.create({
+      data: {
+        name: updateData.name || 'Dhanush M',
+        ...updateData,
+      },
+    });
   }
 
-  const updatedProfile = await prisma.profile.update({
-    where: { id: existing.id },
-    data: updateData,
-  });
+  const responseData = {
+    ...updated,
+    image: updated.avatarUrl,
+  };
 
-  return successResponse(res, updatedProfile, 'Profile updated successfully');
-}
+  return successResponse(res, 200, 'Profile updated successfully', responseData);
+};
 
 /**
  * Upload Profile Image
  * POST /api/profile/image
  */
-async function uploadProfileImage(req, res) {
-  if (!req.file) {
-    return errorResponse(res, 'No image file uploaded.', 400);
+export const uploadProfileImage = async (req, res) => {
+  if (!req.file || !req.file.buffer) {
+    return errorResponse(res, 400, 'Image file is required');
   }
 
-  const profile = await getOrCreateProfile();
+  let profile = await prisma.profile.findFirst();
+  const oldPublicId = profile?.avatarPublicId;
 
-  // 1. Upload new image to Cloudinary (folder: portfolio/profile)
-  const uploadResult = await fileService.uploadImage(req.file, {
-    folder: 'portfolio/profile',
-  });
+  // Upload to Cloudinary portfolio/profile/ and clean up previous image
+  const uploadResult = await cloudinaryService.replaceFile(
+    req.file.buffer,
+    'portfolio/profile',
+    oldPublicId,
+    { resource_type: 'image' }
+  );
 
-  // 2. Save new Cloudinary URL and public ID to MySQL
+  const newAvatarUrl = uploadResult.secure_url || uploadResult.url;
+  const newPublicId = uploadResult.public_id;
+
   let updated;
-  try {
+  if (profile) {
     updated = await prisma.profile.update({
       where: { id: profile.id },
       data: {
-        profileImageUrl: uploadResult.url,
-        cloudinaryPublicId: uploadResult.publicId,
-        profileImageFileName: uploadResult.fileName,
-        fileType: uploadResult.fileType,
-        fileSize: uploadResult.fileSize,
+        avatarUrl: newAvatarUrl,
+        avatarPublicId: newPublicId,
       },
     });
-  } catch (dbError) {
-    // If database update fails after Cloudinary upload, delete newly uploaded file to avoid orphans
-    await fileService.deleteFile(uploadResult.publicId).catch((err) => {
-      console.warn('[Profile] Failed to rollback orphan Cloudinary file:', err.message);
-    });
-    throw dbError;
-  }
-
-  // 3. Delete old Cloudinary file only after new upload and DB update succeed
-  if (profile.cloudinaryPublicId && profile.cloudinaryPublicId !== uploadResult.publicId) {
-    fileService.deleteFile(profile.cloudinaryPublicId).catch((err) => {
-      console.warn('[Profile] Failed to cleanup previous Cloudinary asset:', err.message);
+  } else {
+    updated = await prisma.profile.create({
+      data: {
+        name: 'Dhanush M',
+        avatarUrl: newAvatarUrl,
+        avatarPublicId: newPublicId,
+      },
     });
   }
 
-  return successResponse(
-    res,
-    {
-      profileImageUrl: updated.profileImageUrl,
-      imageUrl: updated.profileImageUrl,
-      cloudinaryPublicId: updated.cloudinaryPublicId,
-      profileImageFileName: updated.profileImageFileName,
-      fileType: updated.fileType,
-      fileSize: updated.fileSize,
+  return successResponse(res, 200, 'Profile image uploaded successfully', {
+    profileImageUrl: newAvatarUrl,
+    avatarUrl: newAvatarUrl,
+    url: newAvatarUrl,
+    public_id: newPublicId,
+    profile: {
+      ...updated,
+      image: newAvatarUrl,
     },
-    'Profile image uploaded successfully to Cloudinary'
-  );
-}
+  });
+};
 
 /**
  * Delete Profile Image
  * DELETE /api/profile/image
  */
-async function deleteProfileImage(req, res) {
-  const profile = await getOrCreateProfile();
+export const deleteProfileImage = async (req, res) => {
+  const profile = await prisma.profile.findFirst();
 
-  // Delete from Cloudinary if exists
-  if (profile.cloudinaryPublicId) {
-    await fileService.deleteFile(profile.cloudinaryPublicId).catch((err) => {
-      console.warn('[Profile] Failed to delete Cloudinary asset:', err.message);
+  if (profile && profile.avatarPublicId) {
+    await cloudinaryService.deleteFile(profile.avatarPublicId, 'image');
+    await prisma.profile.update({
+      where: { id: profile.id },
+      data: {
+        avatarUrl: '/dhanush-profile.jpg',
+        avatarPublicId: null,
+      },
     });
   }
 
-  const updated = await prisma.profile.update({
-    where: { id: profile.id },
-    data: {
-      profileImageUrl: null,
-      cloudinaryPublicId: null,
-      profileImageFileName: null,
-      fileType: null,
-      fileSize: null,
-    },
+  return successResponse(res, 200, 'Profile image reset to default', {
+    avatarUrl: '/dhanush-profile.jpg',
+    image: '/dhanush-profile.jpg',
   });
+};
 
-  return successResponse(
-    res,
-    {
-      ...updated,
-      imageUrl: null,
-    },
-    'Profile image deleted successfully'
-  );
-}
-
-module.exports = {
+export default {
   getProfile,
   updateProfile,
   uploadProfileImage,

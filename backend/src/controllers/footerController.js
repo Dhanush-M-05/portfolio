@@ -1,65 +1,62 @@
-const { prisma } = require('../config/database');
-const { successResponse } = require('../utils/apiResponse');
+import prisma from '../config/database.js';
+import { successResponse } from '../utils/apiResponse.js';
 
 /**
- * Helper to get or create singleton Footer
+ * Get Footer Content
+ * GET /api/footer
  */
-async function getOrCreateFooter() {
+export const getFooter = async (req, res) => {
   let footer = await prisma.footer.findFirst();
+
   if (!footer) {
     footer = await prisma.footer.create({
       data: {
-        description: 'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development.',
-        copyrightText: `© ${new Date().getFullYear()} Dhanush M. All Rights Reserved.`,
+        brandName: 'Dhanush M',
+        brandRole: 'Web Developer',
+        tagline: 'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development.',
+        quickLinksHeading: 'Navigation',
+        deepLinksHeading: 'Portfolio',
+        contactHeading: 'Direct Inquiries',
+        contactDesc: 'Available for web development projects, freelance collaborations, and full-time opportunities.',
+        copyrightText: 'Designed & Built with React and Pure CSS.',
         email: 'dhanush2005mp@gmail.com',
-        phone: '9344976660',
-        location: 'Chennai, Tamil Nadu',
+        phone: '+91 98765 43210',
+        location: 'Chennai, India',
       },
     });
   }
-  return footer;
-}
+
+  return successResponse(res, 200, 'Footer retrieved', footer);
+};
 
 /**
- * Get Footer content
- * GET /api/footer
- */
-async function getFooter(req, res) {
-  const footer = await getOrCreateFooter();
-  return successResponse(res, footer, 'Footer content retrieved successfully');
-}
-
-/**
- * Update Footer content
+ * Update Footer Content
  * PUT /api/footer
  */
-async function updateFooter(req, res) {
-  const existing = await getOrCreateFooter();
+export const updateFooter = async (req, res) => {
+  let footer = await prisma.footer.findFirst();
+  const updateData = { ...req.body };
 
-  const allowedFields = [
-    'description',
-    'copyrightText',
-    'email',
-    'phone',
-    'location',
-  ];
+  delete updateData.id;
+  delete updateData.createdAt;
+  delete updateData.updatedAt;
 
-  const updateData = {};
-  for (const field of allowedFields) {
-    if (req.body[field] !== undefined) {
-      updateData[field] = req.body[field];
-    }
+  let updated;
+  if (footer) {
+    updated = await prisma.footer.update({
+      where: { id: footer.id },
+      data: updateData,
+    });
+  } else {
+    updated = await prisma.footer.create({
+      data: updateData,
+    });
   }
 
-  const updatedFooter = await prisma.footer.update({
-    where: { id: existing.id },
-    data: updateData,
-  });
+  return successResponse(res, 200, 'Footer updated successfully', updated);
+};
 
-  return successResponse(res, updatedFooter, 'Footer updated successfully');
-}
-
-module.exports = {
+export default {
   getFooter,
   updateFooter,
 };

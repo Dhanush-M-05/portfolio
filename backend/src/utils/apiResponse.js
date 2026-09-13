@@ -1,63 +1,29 @@
 /**
- * Formats a successful response
+ * Standard success response helper
  */
-function successResponse(res, data = {}, message = 'Operation successful', statusCode = 200) {
+export const successResponse = (res, statusCode = 200, message = 'Operation successful', data = {}) => {
   return res.status(statusCode).json({
     success: true,
     message,
     data,
   });
-}
+};
 
 /**
- * Formats an error response
+ * Standard error response helper
  */
-function errorResponse(res, message = 'Something went wrong', statusCode = 500, errors = undefined) {
-  const responseBody = {
+export const errorResponse = (res, statusCode = 500, message = 'Internal server error', errors = null) => {
+  const payload = {
     success: false,
     message,
   };
-
-  if (errors !== undefined) {
-    responseBody.errors = errors;
+  if (errors) {
+    payload.errors = errors;
   }
+  return res.status(statusCode).json(payload);
+};
 
-  return res.status(statusCode).json(responseBody);
-}
-
-/**
- * Formats a paginated response
- */
-function paginatedResponse(res, data = [], total = 0, page = 1, limit = 10, message = 'Data retrieved successfully') {
-  const totalPages = Math.ceil(total / limit) || 1;
-
-  return res.status(200).json({
-    success: true,
-    message,
-    data,
-    pagination: {
-      page: Number(page),
-      limit: Number(limit),
-      total,
-      totalPages,
-    },
-  });
-}
-
-/**
- * Formats a validation error response
- */
-function validationErrorResponse(res, errors = [], message = 'Validation failed') {
-  return res.status(422).json({
-    success: false,
-    message,
-    errors,
-  });
-}
-
-module.exports = {
+export default {
   successResponse,
   errorResponse,
-  paginatedResponse,
-  validationErrorResponse,
 };

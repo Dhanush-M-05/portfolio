@@ -1,32 +1,24 @@
-const express = require('express');
-const router = express.Router();
-const certificationController = require('../controllers/certificationController');
-const asyncHandler = require('../utils/asyncHandler');
-const { createCertificationValidator, updateCertificationValidator } = require('../validators/certificationValidator');
-const { authenticate } = require('../middleware/authMiddleware');
-const { uploadCertification } = require('../config/multer');
-const { handleUpload } = require('../middleware/uploadMiddleware');
+import { Router } from 'express';
+import {
+  getCertifications,
+  getCertificationById,
+  createCertification,
+  updateCertification,
+  deleteCertification,
+  viewCertificate,
+} from '../controllers/certificationController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import { uploadCertificate } from '../middleware/uploadMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public
-router.get('/', asyncHandler(certificationController.getCertifications));
-router.get('/:id/view', asyncHandler(certificationController.viewCertificationFile));
-router.get('/:id', asyncHandler(certificationController.getCertificationById));
+const router = Router();
 
-// Admin Protected
-router.post(
-  '/',
-  authenticate,
-  handleUpload(uploadCertification.any()),
-  createCertificationValidator,
-  asyncHandler(certificationController.createCertification)
-);
-router.put(
-  '/:id',
-  authenticate,
-  handleUpload(uploadCertification.any()),
-  updateCertificationValidator,
-  asyncHandler(certificationController.updateCertification)
-);
-router.delete('/:id', authenticate, asyncHandler(certificationController.deleteCertification));
+router.get('/', asyncHandler(getCertifications));
+router.get('/:id', asyncHandler(getCertificationById));
+router.get('/:id/view', asyncHandler(viewCertificate));
 
-module.exports = router;
+router.post('/', requireAuth, uploadCertificate.single('certificate'), asyncHandler(createCertification));
+router.put('/:id', requireAuth, uploadCertificate.single('certificate'), asyncHandler(updateCertification));
+router.delete('/:id', requireAuth, asyncHandler(deleteCertification));
+
+export default router;

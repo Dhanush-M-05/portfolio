@@ -1,291 +1,232 @@
-const { prisma } = require('../config/database');
-const fileService = require('../services/fileService');
-const {
-  successResponse,
-  errorResponse,
-  paginatedResponse,
-} = require('../utils/apiResponse');
-
-function formatCertification(c) {
-  if (!c) return c;
-  return {
-    ...c,
-    name: c.title,
-  };
-}
+import prisma from '../config/database.js';
+import cloudinaryService from '../services/cloudinaryService.js';
+import resumeService from '../services/resumeService.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Get all certifications
+ * Get Certifications
  * GET /api/certifications
  */
-async function getCertifications(req, res) {
-  const { page, limit, all } = req.query;
-
-  const where = all === 'true' ? {} : { isActive: true };
-
-  if (page || limit) {
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
-    const skip = (pageNum - 1) * limitNum;
-
-    const [total, certifications] = await Promise.all([
-      prisma.certification.count({ where }),
-      prisma.certification.findMany({
-        where,
-        orderBy: { order: 'asc' },
-        skip,
-        take: limitNum,
-      }),
-    ]);
-
-    return paginatedResponse(res, certifications.map(formatCertification), total, pageNum, limitNum, 'Certifications retrieved successfully');
-  }
+export const getCertifications = async (req, res) => {
+  const showAll = req.query.all === 'true';
+  const where = showAll ? {} : { isActive: true };
 
   const certifications = await prisma.certification.findMany({
     where,
     orderBy: { order: 'asc' },
   });
 
-  return successResponse(res, certifications.map(formatCertification), 'Certifications retrieved successfully');
-}
+  // Map fileUrl to certificateUrl for complete frontend compatibility
+  const mapped = certifications.map((c) => ({
+    ...c,
+    fileUrl: c.certificateUrl,
+    name: c.title,
+  }));
+
+  return successResponse(res, 200, 'Certifications retrieved', mapped);
+};
 
 /**
- * Get single certification
+ * Get Certification by ID
  * GET /api/certifications/:id
  */
-async function getCertificationById(req, res) {
+export const getCertificationById = async (req, res) => {
   const { id } = req.params;
-
   const cert = await prisma.certification.findUnique({
-    where: { id: Number(id) },
+    where: { id },
   });
 
   if (!cert) {
-    return errorResponse(res, 'Certification not found', 404);
+    return errorResponse(res, 404, 'Certification not found');
   }
 
-  return successResponse(res, formatCertification(cert), 'Certification retrieved successfully');
-}
+  return successResponse(res, 200, 'Certification retrieved', {
+    ...cert,
+    fileUrl: cert.certificateUrl,
+    name: cert.title,
+  });
+};
 
 /**
- * Create certification (MANDATORY FILE UPLOAD)
+ * Create Certification
  * POST /api/certifications
  */
-async function createCertification(req, res) {
-  const uploadedFile = req.file || (req.files && req.files.length > 0 ? req.files[0] : null);
+export const createCertification = async (req, res) => {
+  const data = req.body;
+  const title = (data.title || data.name || '').trim();
 
-  if (!uploadedFile) {
-    return res.status(400).json({
-      success: false,
-      message: 'Certificate file is required',
-    });
+  if (!title || !data.issuer) {
+    return errorResponse(res, 400, 'Title and issuer are required');
   }
 
-  const {
-    title,
-    issuer,
-    issueDate,
-    credentialId,
-    credentialUrl,
-    order,
-    isActive,
-  } = req.body;
-
-  const certTitle = title || req.body.name;
-
-  if (!certTitle || !issuer) {
-    return errorResponse(res, 'Title (or name) and issuer are required', 400);
+  let skills = data.skillsCovered;
+  if (typeof skills === 'string') {
+    skills = skills.split(',').map((s) => s.trim()).filter(Boolean);
   }
 
-  // 1. Upload certificate to Cloudinary (folder: portfolio/certificates)
-  const uploadResult = await fileService.uploadCertificate(uploadedFile);
+  let certificateUrl = data.certificateUrl || '';
+  let certificatePublicId = data.certificatePublicId || '';
+  let certificateFilename = '';
+  let certificateMimeType = '';
+  let certificateSize = 0;
 
-  // 2. Save certificate metadata and Cloudinary URL to MySQL
-  let newCertification;
-  try {
-    newCertification = await prisma.certification.create({
-      data: {
-        title: certTitle,
-        issuer,
-        issueDate: issueDate || null,
-        credentialId: credentialId || null,
-        credentialUrl: credentialUrl || null,
-        fileUrl: uploadResult.url,
-        cloudinaryPublicId: uploadResult.publicId,
-        fileName: uploadResult.fileName,
-        fileType: uploadResult.fileType,
-        fileSize: uploadResult.fileSize,
-        order: order !== undefined ? Number(order) : 0,
-        isActive: isActive !== undefined ? Boolean(isActive) : true,
-      },
-    });
-  } catch (dbError) {
-    // If DB fails after upload, rollback the newly uploaded Cloudinary file
-    await fileService.deleteFile(uploadResult.publicId).catch((err) => {
-      console.warn('[Certification] Rollback failed:', err.message);
-    });
-    throw dbError;
+  if (req.file && req.file.buffer) {
+    const isPdf = req.file.mimetype === 'application/pdf';
+    const uploadResult = await cloudinaryService.uploadBuffer(
+      req.file.buffer,
+      'portfolio/certificates',
+      { resource_type: isPdf ? 'raw' : 'image' }
+    );
+    certificateUrl = uploadResult.secure_url || uploadResult.url;
+    certificatePublicId = uploadResult.public_id;
+    certificateFilename = req.file.originalname;
+    certificateMimeType = req.file.mimetype;
+    certificateSize = req.file.size;
   }
 
-  return successResponse(res, formatCertification(newCertification), 'Certification created successfully with certificate file', 201);
-}
+  const newCert = await prisma.certification.create({
+    data: {
+      title,
+      issuer: data.issuer.trim(),
+      issueDate: data.issueDate || '',
+      credentialId: data.credentialId || '',
+      credentialUrl: data.credentialUrl || '',
+      certificateUrl,
+      certificatePublicId,
+      certificateFilename,
+      certificateMimeType,
+      certificateSize,
+      skillsCovered: skills || [],
+      description: data.description || '',
+      order: data.order !== undefined ? Number(data.order) : 0,
+      isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
+    },
+  });
+
+  return successResponse(res, 201, 'Certification created successfully', {
+    ...newCert,
+    fileUrl: newCert.certificateUrl,
+    name: newCert.title,
+  });
+};
 
 /**
- * Update certification
+ * Update Certification
  * PUT /api/certifications/:id
  */
-async function updateCertification(req, res) {
+export const updateCertification = async (req, res) => {
   const { id } = req.params;
-  const {
-    title,
-    issuer,
-    issueDate,
-    credentialId,
-    credentialUrl,
-    order,
-    isActive,
-    fileUrl: directFileUrl,
-  } = req.body;
+  const data = req.body;
 
-  const existing = await prisma.certification.findUnique({
-    where: { id: Number(id) },
-  });
-
+  const existing = await prisma.certification.findUnique({ where: { id } });
   if (!existing) {
-    return errorResponse(res, 'Certification not found', 404);
+    return errorResponse(res, 404, 'Certification not found');
   }
 
-  const uploadedFile = req.file || (req.files && req.files.length > 0 ? req.files[0] : null);
-
-  // If user tries to unset fileUrl to empty/null without a new file, reject
-  if (!uploadedFile && (directFileUrl === '' || directFileUrl === null)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Certificate file is required',
-    });
+  let skills = data.skillsCovered;
+  if (typeof skills === 'string') {
+    skills = skills.split(',').map((s) => s.trim()).filter(Boolean);
   }
 
-  const updateData = {};
-  if (title !== undefined || req.body.name !== undefined) {
-    updateData.title = title || req.body.name;
-  }
-  if (issuer !== undefined) updateData.issuer = issuer;
-  if (issueDate !== undefined) updateData.issueDate = issueDate;
-  if (credentialId !== undefined) updateData.credentialId = credentialId;
-  if (credentialUrl !== undefined) updateData.credentialUrl = credentialUrl;
-  if (order !== undefined) updateData.order = Number(order);
-  if (isActive !== undefined) updateData.isActive = Boolean(isActive);
+  let certificateUrl = data.certificateUrl !== undefined ? data.certificateUrl : existing.certificateUrl;
+  let certificatePublicId = data.certificatePublicId !== undefined ? data.certificatePublicId : existing.certificatePublicId;
+  let certificateFilename = existing.certificateFilename;
+  let certificateMimeType = existing.certificateMimeType;
+  let certificateSize = existing.certificateSize;
 
-  let newUploadResult = null;
-
-  if (uploadedFile) {
-    // 1. Upload replacement certificate to Cloudinary
-    newUploadResult = await fileService.uploadCertificate(uploadedFile);
-
-    updateData.fileName = newUploadResult.fileName;
-    updateData.fileUrl = newUploadResult.url;
-    updateData.cloudinaryPublicId = newUploadResult.publicId;
-    updateData.fileType = newUploadResult.fileType;
-    updateData.fileSize = newUploadResult.fileSize;
-  } else if (directFileUrl && directFileUrl.trim() !== '') {
-    updateData.fileUrl = directFileUrl;
-    if (req.body.cloudinaryPublicId) {
-      updateData.cloudinaryPublicId = req.body.cloudinaryPublicId;
-    }
+  if (req.file && req.file.buffer) {
+    const isPdf = req.file.mimetype === 'application/pdf';
+    const uploadResult = await cloudinaryService.replaceFile(
+      req.file.buffer,
+      'portfolio/certificates',
+      existing.certificatePublicId,
+      { resource_type: isPdf ? 'raw' : 'image' }
+    );
+    certificateUrl = uploadResult.secure_url || uploadResult.url;
+    certificatePublicId = uploadResult.public_id;
+    certificateFilename = req.file.originalname;
+    certificateMimeType = req.file.mimetype;
+    certificateSize = req.file.size;
   }
 
-  let updatedCertification;
-  try {
-    updatedCertification = await prisma.certification.update({
-      where: { id: Number(id) },
-      data: updateData,
-    });
-  } catch (dbError) {
-    // If DB fails after new upload, rollback new Cloudinary asset
-    if (newUploadResult?.publicId) {
-      await fileService.deleteFile(newUploadResult.publicId).catch((err) => {
-        console.warn('[Certification] Rollback failed:', err.message);
-      });
-    }
-    throw dbError;
-  }
-
-  // Delete old Cloudinary file only after new upload and DB update succeed
-  if (newUploadResult && existing.cloudinaryPublicId && existing.cloudinaryPublicId !== newUploadResult.publicId) {
-    fileService.deleteFile(existing.cloudinaryPublicId).catch((err) => {
-      console.warn('[Certification] Failed to delete previous Cloudinary file:', err.message);
-    });
-  }
-
-  return successResponse(res, formatCertification(updatedCertification), 'Certification updated successfully');
-}
-
-/**
- * Stream/view certificate file inline in browser
- * GET /api/certifications/:id/view
- */
-async function viewCertificationFile(req, res) {
-  const { id } = req.params;
-  const cert = await prisma.certification.findUnique({
-    where: { id: Number(id) },
+  const updated = await prisma.certification.update({
+    where: { id },
+    data: {
+      ...(data.title !== undefined && { title: data.title }),
+      ...(data.name !== undefined && !data.title && { title: data.name }),
+      ...(data.issuer !== undefined && { issuer: data.issuer }),
+      ...(data.issueDate !== undefined && { issueDate: data.issueDate }),
+      ...(data.credentialId !== undefined && { credentialId: data.credentialId }),
+      ...(data.credentialUrl !== undefined && { credentialUrl: data.credentialUrl }),
+      ...(certificateUrl !== undefined && { certificateUrl }),
+      ...(certificatePublicId !== undefined && { certificatePublicId }),
+      ...(certificateFilename !== undefined && { certificateFilename }),
+      ...(certificateMimeType !== undefined && { certificateMimeType }),
+      ...(certificateSize !== undefined && { certificateSize }),
+      ...(skills !== undefined && { skillsCovered: skills }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.order !== undefined && { order: Number(data.order) }),
+      ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
+    },
   });
 
-  if (!cert || !cert.fileUrl) {
-    return errorResponse(res, 'Certificate file not found', 404);
-  }
-
-  try {
-    const { stream, size, mimeType } = await fileService.getFileStream(cert.fileUrl);
-    res.setHeader('Content-Type', cert.fileType || mimeType || 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${cert.fileName || 'certificate.pdf'}"`);
-    if (size) {
-      res.setHeader('Content-Length', size);
-    }
-    return stream.pipe(res);
-  } catch (error) {
-    // If streaming fails but file is remote URL, fallback to redirect
-    if (fileService.isRemoteUrl(cert.fileUrl)) {
-      return res.redirect(cert.fileUrl);
-    }
-    console.error('[CertView] Streaming failed:', error.message);
-    return errorResponse(res, 'Failed to stream certificate document', 500);
-  }
-}
+  return successResponse(res, 200, 'Certification updated successfully', {
+    ...updated,
+    fileUrl: updated.certificateUrl,
+    name: updated.title,
+  });
+};
 
 /**
- * Delete certification
+ * Delete Certification
  * DELETE /api/certifications/:id
  */
-async function deleteCertification(req, res) {
+export const deleteCertification = async (req, res) => {
   const { id } = req.params;
 
-  const cert = await prisma.certification.findUnique({
-    where: { id: Number(id) },
-  });
-
-  if (!cert) {
-    return errorResponse(res, 'Certification not found', 404);
+  const existing = await prisma.certification.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Certification not found');
   }
 
-  // Delete from Cloudinary
-  if (cert.cloudinaryPublicId) {
-    await fileService.deleteFile(cert.cloudinaryPublicId).catch((err) => {
-      console.warn('[Certification] Failed to delete Cloudinary file:', err.message);
-    });
+  if (existing.certificatePublicId) {
+    const isPdf = existing.certificateMimeType === 'application/pdf';
+    cloudinaryService.deleteFile(existing.certificatePublicId, isPdf ? 'raw' : 'image').catch(() => {});
   }
 
-  await prisma.certification.delete({
-    where: { id: Number(id) },
-  });
+  await prisma.certification.delete({ where: { id } });
 
-  return successResponse(res, null, 'Certification deleted successfully');
-}
+  return successResponse(res, 200, 'Certification deleted successfully');
+};
 
-module.exports = {
+/**
+ * View Certificate File in Browser
+ * GET /api/certifications/:id/view
+ */
+export const viewCertificate = async (req, res) => {
+  const { id } = req.params;
+
+  const cert = await prisma.certification.findUnique({ where: { id } });
+  if (!cert || !cert.certificateUrl) {
+    return errorResponse(res, 404, 'Certificate file not found');
+  }
+
+  const filename = cert.certificateFilename || `${cert.title.replace(/\s+/g, '_')}_Certificate.pdf`;
+  const isPdf = cert.certificateMimeType === 'application/pdf' || cert.certificateUrl.toLowerCase().endsWith('.pdf');
+
+  if (isPdf) {
+    return resumeService.pipePdfStream(cert.certificateUrl, res, false, filename);
+  }
+
+  // Redirect to Cloudinary image URL for preview
+  return res.redirect(cert.certificateUrl);
+};
+
+export default {
   getCertifications,
   getCertificationById,
   createCertification,
   updateCertification,
   deleteCertification,
-  viewCertificationFile,
+  viewCertificate,
 };

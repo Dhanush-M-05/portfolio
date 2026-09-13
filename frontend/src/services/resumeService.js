@@ -8,8 +8,11 @@ export const uploadResume = async (file) => {
   return resumeApi.uploadResume(file);
 };
 
-export const updateResume = async (id, data) => {
-  return resumeApi.updateResume(id, data);
+export const updateResume = async (idOrFile, data) => {
+  if (idOrFile instanceof File || (typeof Blob !== 'undefined' && idOrFile instanceof Blob)) {
+    return resumeApi.uploadResume(idOrFile);
+  }
+  return resumeApi.updateResume(idOrFile, data);
 };
 
 export const deleteResume = async (id) => {

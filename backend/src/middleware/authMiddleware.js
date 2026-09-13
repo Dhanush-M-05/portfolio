@@ -1,87 +1,48 @@
-const jwt = require('jsonwebtoken');
-const { prisma } = require('../config/database');
-const environment = require('../config/environment');
-const { errorResponse } = require('../utils/apiResponse');
+import jwt from 'jsonwebtoken';
+import ENV from '../config/environment.js';
+import prisma from '../config/database.js';
+import { errorResponse } from '../utils/apiResponse.js';
 
-/**
- * Middleware to authenticate requests using JWT Bearer token
- */
-async function authenticate(req, res, next) {
+export const requireAuth = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return errorResponse(
-        res,
-        'Authentication required. No Bearer token provided.',
-        401
-      );
+      return errorResponse(res, 401, 'Authentication token required');
     }
 
     const token = authHeader.split(' ')[1];
+    if (!token) {
+      return errorResponse(res, 401, 'Authentication token missing');
+    }
 
     let decoded;
     try {
-      decoded = jwt.verify(token, environment.JWT_SECRET);
+      decoded = jwt.verify(token, ENV.JWT_SECRET);
     } catch (err) {
       if (err.name === 'TokenExpiredError') {
-        return errorResponse(res, 'Token has expired. Please log in again.', 401);
+        return errorResponse(res, 401, 'Authentication token expired');
       }
-      return errorResponse(res, 'Invalid or malformed authentication token.', 401);
+      return errorResponse(res, 401, 'Invalid authentication token');
     }
 
     if (!decoded || !decoded.id) {
-      return errorResponse(res, 'Invalid token payload.', 401);
+      return errorResponse(res, 401, 'Invalid token payload');
     }
 
-    // Look up the admin user in the database
-    const admin = await prisma.adminUser.findUnique({
+    const user = await prisma.adminUser.findUnique({
       where: { id: decoded.id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: { id: true, email: true, username: true, role: true },
     });
 
-    if (!admin) {
-      return errorResponse(res, 'Admin user account no longer exists.', 401);
+    if (!user) {
+      return errorResponse(res, 401, 'User account no longer exists');
     }
 
-    // Attach user to request
-    req.user = admin;
+    req.user = user;
     next();
   } catch (error) {
-    console.error('[AuthMiddleware] Error:', error.message);
-    return errorResponse(res, 'Authentication check failed', 401);
+    return errorResponse(res, 500, 'Authentication error: ' + error.message);
   }
-}
-
-/**
- * Role-based authorization middleware
- */
-function authorize(...roles) {
-  return (req, res, next) => {
-    if (!req.user) {
-      return errorResponse(res, 'Authentication required', 401);
-    }
-
-    if (roles.length > 0 && !roles.includes(req.user.role)) {
-      return errorResponse(
-        res,
-        'Forbidden: You do not have permission to perform this action.',
-        403
-      );
-    }
-
-    next();
-  };
-}
-
-module.exports = {
-  authenticate,
-  authorize,
 };
+
+export default requireAuth;

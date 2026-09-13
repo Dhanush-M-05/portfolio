@@ -1,33 +1,29 @@
-const express = require('express');
-const router = express.Router();
-const projectController = require('../controllers/projectController');
-const asyncHandler = require('../utils/asyncHandler');
-const { createProjectValidator, updateProjectValidator } = require('../validators/projectValidator');
-const { authenticate } = require('../middleware/authMiddleware');
-const { uploadProjectImage } = require('../config/multer');
-const { handleUpload } = require('../middleware/uploadMiddleware');
+import { Router } from 'express';
+import {
+  getProjects,
+  getProjectById,
+  getProjectBySlug,
+  createProject,
+  updateProject,
+  deleteProject,
+  addProjectImage,
+  deleteProjectImage,
+} from '../controllers/projectController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import { uploadSingleImage } from '../middleware/uploadMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public
-router.get('/', asyncHandler(projectController.getProjects));
-router.get('/slug/:slug', asyncHandler(projectController.getProjectBySlug));
-router.get('/:id', asyncHandler(projectController.getProjectById));
+const router = Router();
 
-// Admin Protected
-router.post('/', authenticate, createProjectValidator, asyncHandler(projectController.createProject));
-router.put('/:id', authenticate, updateProjectValidator, asyncHandler(projectController.updateProject));
-router.delete('/:id', authenticate, asyncHandler(projectController.deleteProject));
+router.get('/', asyncHandler(getProjects));
+router.get('/slug/:slug', asyncHandler(getProjectBySlug));
+router.get('/:id', asyncHandler(getProjectById));
 
-// Project Images
-router.post(
-  '/:id/images',
-  authenticate,
-  handleUpload(uploadProjectImage.single('image')),
-  asyncHandler(projectController.addProjectImage)
-);
-router.delete(
-  '/:id/images/:imageId',
-  authenticate,
-  asyncHandler(projectController.deleteProjectImage)
-);
+router.post('/', requireAuth, uploadSingleImage.single('thumbnail'), asyncHandler(createProject));
+router.put('/:id', requireAuth, uploadSingleImage.single('thumbnail'), asyncHandler(updateProject));
+router.delete('/:id', requireAuth, asyncHandler(deleteProject));
 
-module.exports = router;
+router.post('/:id/images', requireAuth, uploadSingleImage.single('image'), asyncHandler(addProjectImage));
+router.delete('/:id/images/:imageId', requireAuth, asyncHandler(deleteProjectImage));
+
+export default router;

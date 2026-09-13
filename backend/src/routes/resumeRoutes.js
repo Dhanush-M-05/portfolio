@@ -1,32 +1,24 @@
-const express = require('express');
-const router = express.Router();
-const resumeController = require('../controllers/resumeController');
-const asyncHandler = require('../utils/asyncHandler');
-const { updateResumeValidator } = require('../validators/resumeValidator');
-const { authenticate } = require('../middleware/authMiddleware');
-const { uploadResume } = require('../config/multer');
-const { handleUpload } = require('../middleware/uploadMiddleware');
+import { Router } from 'express';
+import {
+  getResume,
+  uploadResume as uploadResumeController,
+  updateResume,
+  deleteResume,
+  downloadResume,
+  viewResume,
+} from '../controllers/resumeController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import { uploadResume as uploadResumeMiddleware } from '../middleware/uploadMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public endpoints
-router.get('/', asyncHandler(resumeController.getResume));
-router.get('/download', asyncHandler(resumeController.downloadResume));
-router.get('/view', asyncHandler(resumeController.viewResume));
-router.get('/preview', asyncHandler(resumeController.viewResume));
+const router = Router();
 
-// Admin Protected endpoints
-router.post(
-  '/',
-  authenticate,
-  handleUpload(uploadResume.any()),
-  asyncHandler(resumeController.uploadResume)
-);
-router.post(
-  '/upload',
-  authenticate,
-  handleUpload(uploadResume.any()),
-  asyncHandler(resumeController.uploadResume)
-);
-router.put('/:id', authenticate, updateResumeValidator, asyncHandler(resumeController.updateResume));
-router.delete('/:id', authenticate, asyncHandler(resumeController.deleteResume));
+router.get('/', asyncHandler(getResume));
+router.get('/download', asyncHandler(downloadResume));
+router.get('/view', asyncHandler(viewResume));
 
-module.exports = router;
+router.post('/', requireAuth, uploadResumeMiddleware.single('file'), asyncHandler(uploadResumeController));
+router.put('/:id', requireAuth, uploadResumeMiddleware.single('file'), asyncHandler(updateResume));
+router.delete('/:id', requireAuth, asyncHandler(deleteResume));
+
+export default router;

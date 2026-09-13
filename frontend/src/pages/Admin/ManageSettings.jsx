@@ -170,7 +170,7 @@ export const ManageSettings = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #E2E8F0' }}>
                   <span style={{ color: '#64748B' }}>API Base URL:</span>
                   <span style={{ fontFamily: 'monospace', color: '#0F172A' }}>
-                    {import.meta.env.VITE_API_BASE_URL || 'Local CMS Simulation'}
+                    {import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #E2E8F0' }}>

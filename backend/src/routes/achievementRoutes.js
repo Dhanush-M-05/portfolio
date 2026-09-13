@@ -1,16 +1,20 @@
-const express = require('express');
-const router = express.Router();
-const achievementController = require('../controllers/achievementController');
-const asyncHandler = require('../utils/asyncHandler');
-const { authenticate } = require('../middleware/authMiddleware');
+import { Router } from 'express';
+import {
+  getAchievements,
+  getAchievementById,
+  createAchievement,
+  updateAchievement,
+  deleteAchievement,
+} from '../controllers/achievementController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public
-router.get('/', asyncHandler(achievementController.getAchievements));
-router.get('/:id', asyncHandler(achievementController.getAchievementById));
+const router = Router();
 
-// Admin Protected
-router.post('/', authenticate, asyncHandler(achievementController.createAchievement));
-router.put('/:id', authenticate, asyncHandler(achievementController.updateAchievement));
-router.delete('/:id', authenticate, asyncHandler(achievementController.deleteAchievement));
+router.get('/', asyncHandler(getAchievements));
+router.get('/:id', asyncHandler(getAchievementById));
+router.post('/', requireAuth, asyncHandler(createAchievement));
+router.put('/:id', requireAuth, asyncHandler(updateAchievement));
+router.delete('/:id', requireAuth, asyncHandler(deleteAchievement));
 
-module.exports = router;
+export default router;

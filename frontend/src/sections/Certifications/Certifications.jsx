@@ -15,6 +15,10 @@ export const Certifications = () => {
     .filter((cert) => cert.isVisible !== false && cert.isActive !== false)
     .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
 
+  if (!activeCertifications || activeCertifications.length === 0) {
+    return null;
+  }
+
   return (
     <section id="certifications" className="section certifications-section">
       <div className="container">

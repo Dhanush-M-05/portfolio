@@ -1,35 +1,31 @@
-const { body } = require('express-validator');
-const { validate } = require('../middleware/validationMiddleware');
+export const validateContact = (data) => {
+  const errors = {};
 
-const createContactValidator = [
-  body('name')
-    .trim()
-    .notEmpty()
-    .withMessage('Name is required')
-    .isLength({ min: 2, max: 100 })
-    .withMessage('Name must be between 2 and 100 characters'),
-  body('email')
-    .trim()
-    .notEmpty()
-    .withMessage('Email is required')
-    .isEmail()
-    .withMessage('Please provide a valid email address')
-    .normalizeEmail(),
-  body('subject')
-    .trim()
-    .notEmpty()
-    .withMessage('Subject is required')
-    .isLength({ min: 2, max: 150 })
-    .withMessage('Subject must be between 2 and 150 characters'),
-  body('message')
-    .trim()
-    .notEmpty()
-    .withMessage('Message is required')
-    .isLength({ min: 5, max: 5000 })
-    .withMessage('Message must be between 5 and 5000 characters'),
-  validate,
-];
+  if (!data.name || typeof data.name !== 'string' || !data.name.trim()) {
+    errors.name = 'Please enter your name';
+  }
 
-module.exports = {
-  createContactValidator,
+  if (!data.email || typeof data.email !== 'string' || !data.email.trim()) {
+    errors.email = 'Please enter your email address';
+  } else {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(data.email.trim())) {
+      errors.email = 'Please enter a valid email address';
+    }
+  }
+
+  if (!data.message || typeof data.message !== 'string' || !data.message.trim()) {
+    errors.message = 'Please enter your message';
+  } else if (data.message.trim().length < 5) {
+    errors.message = 'Message must be at least 5 characters long';
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+};
+
+export default {
+  validateContact,
 };

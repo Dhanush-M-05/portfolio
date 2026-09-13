@@ -1,205 +1,149 @@
-const resumeService = require('../services/resumeService');
-const fileService = require('../services/fileService');
-const { prisma } = require('../config/database');
-const { successResponse, errorResponse } = require('../utils/apiResponse');
+import prisma from '../config/database.js';
+import resumeService from '../services/resumeService.js';
+import cloudinaryService from '../services/cloudinaryService.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Formats resume object to include legacy/frontend compatibility fields
- */
-function formatResume(resume) {
-  if (!resume) return null;
-  const sizeKb = resume.fileSize ? `${Math.round(resume.fileSize / 1024)} KB` : '184 KB';
-  const lastUpdated = resume.uploadedAt
-    ? new Date(resume.uploadedAt).toISOString().split('T')[0]
-    : '2026-09-02';
-
-  return {
-    ...resume,
-    filePath: resume.fileUrl,
-    fileSize: typeof resume.fileSize === 'number' ? sizeKb : resume.fileSize,
-    rawFileSize: resume.fileSize,
-    lastUpdated,
-  };
-}
-
-/**
- * Get active resume metadata (or all resumes if all=true)
+ * Get Resume Info
  * GET /api/resume
  */
-async function getResume(req, res) {
-  const { all } = req.query;
+export const getResume = async (req, res) => {
+  let resume = await prisma.resume.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: 'desc' },
+  });
 
-  if (all === 'true') {
-    const resumes = await prisma.resume.findMany({
-      orderBy: { uploadedAt: 'desc' },
+  if (!resume) {
+    resume = await prisma.resume.create({
+      data: {
+        title: 'ATS-Compliant Software Developer Resume',
+        fileName: 'Dhanush-M-Resume.pdf',
+        fileUrl: '/resume.pdf',
+        publicId: 'local-default-resume',
+        mimeType: 'application/pdf',
+        fileSize: 102400,
+        isActive: true,
+      },
     });
-    return successResponse(res, resumes.map(formatResume), 'All resumes retrieved successfully');
   }
 
-  const activeResume = await resumeService.getActiveResume();
-  if (!activeResume) {
-    return errorResponse(res, 'No active resume found', 404);
-  }
-
-  return successResponse(res, formatResume(activeResume), 'Active resume retrieved successfully');
-}
+  return successResponse(res, 200, 'Resume information retrieved', resume);
+};
 
 /**
- * Upload a new resume PDF
+ * Upload New Resume
  * POST /api/resume
  */
-async function uploadResume(req, res) {
-  let fileName;
-  let fileUrl;
-  let cloudinaryPublicId = null;
-  let fileType = 'application/pdf';
-  let fileSize = 0;
-
-  const uploadedFile = req.file || (req.files && req.files.length > 0 ? req.files[0] : null);
-  const previousActive = await resumeService.getActiveResume();
-
-  if (uploadedFile) {
-    // 1. Validate and upload PDF to Cloudinary (folder: portfolio/resume)
-    const uploadResult = await fileService.uploadResume(uploadedFile);
-    fileName = uploadResult.fileName;
-    fileUrl = uploadResult.url;
-    cloudinaryPublicId = uploadResult.publicId;
-    fileType = uploadResult.fileType;
-    fileSize = uploadResult.fileSize;
-  } else if (req.body.fileUrl) {
-    // If uploaded directly or provided via URL
-    fileUrl = req.body.fileUrl;
-    cloudinaryPublicId = req.body.cloudinaryPublicId || null;
-    fileName = req.body.fileName || 'Dhanush-M-Resume.pdf';
-    fileSize = req.body.fileSize ? Number(req.body.fileSize) : 0;
-    fileType = req.body.fileType || 'application/pdf';
-  } else {
-    return errorResponse(res, 'A PDF resume file or fileUrl is required', 400);
+export const uploadResume = async (req, res) => {
+  if (!req.file) {
+    return errorResponse(res, 400, 'PDF resume file is required');
   }
 
-  const makeActive = req.body.isActive !== undefined ? Boolean(req.body.isActive) : true;
+  const title = req.body.title || 'ATS-Compliant Software Developer Resume';
 
-  // 2. Save new Cloudinary URL/public ID and deactivate previous resume
-  let newResume;
   try {
-    newResume = await resumeService.createResumeWithTransaction({
-      fileName,
-      fileUrl,
-      cloudinaryPublicId,
-      fileType,
-      fileSize,
-      makeActive,
-    });
-  } catch (dbError) {
-    // Rollback new Cloudinary file if database update fails
-    if (cloudinaryPublicId && uploadedFile) {
-      await fileService.deleteFile(cloudinaryPublicId, { resource_type: 'raw' }).catch((err) => {
-        console.warn('[Resume] Failed to rollback orphan Cloudinary file:', err.message);
-      });
-    }
-    throw dbError;
+    const newResume = await resumeService.processResumeUpload(req.file, title);
+    return successResponse(res, 201, 'Resume uploaded and activated successfully', newResume);
+  } catch (error) {
+    return errorResponse(res, 400, error.message);
   }
-
-  // 3. Delete old Cloudinary file only after new upload succeeds and DB is committed
-  if (
-    makeActive &&
-    previousActive?.cloudinaryPublicId &&
-    previousActive.cloudinaryPublicId !== cloudinaryPublicId
-  ) {
-    fileService.deleteFile(previousActive.cloudinaryPublicId, { resource_type: 'raw' }).catch((err) => {
-      console.warn('[Resume] Failed to delete previous Cloudinary asset:', err.message);
-    });
-  }
-
-  return successResponse(res, formatResume(newResume), 'Resume uploaded and activated successfully via Cloudinary', 201);
-}
+};
 
 /**
- * Update resume metadata
+ * Update Resume Metadata
  * PUT /api/resume/:id
  */
-async function updateResume(req, res) {
+export const updateResume = async (req, res) => {
   const { id } = req.params;
-  const { fileName, isActive, fileUrl, cloudinaryPublicId } = req.body;
+  const { title, isActive } = req.body;
 
-  const updateData = {};
-  if (fileName !== undefined) updateData.fileName = fileName;
-  if (isActive !== undefined) updateData.isActive = Boolean(isActive);
-  if (fileUrl !== undefined) updateData.fileUrl = fileUrl;
-  if (cloudinaryPublicId !== undefined) updateData.cloudinaryPublicId = cloudinaryPublicId;
+  // If a new file is uploaded alongside PUT
+  if (req.file) {
+    try {
+      const newResume = await resumeService.processResumeUpload(req.file, title);
+      return successResponse(res, 200, 'Resume updated successfully with new file', newResume);
+    } catch (error) {
+      return errorResponse(res, 400, error.message);
+    }
+  }
 
-  const updatedResume = await resumeService.updateResumeWithTransaction(id, updateData);
+  const existing = await prisma.resume.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Resume not found');
+  }
 
-  return successResponse(res, updatedResume, 'Resume updated successfully');
-}
+  if (isActive === true) {
+    await prisma.resume.updateMany({
+      where: { id: { not: id } },
+      data: { isActive: false },
+    });
+  }
+
+  const updated = await prisma.resume.update({
+    where: { id },
+    data: {
+      ...(title !== undefined && { title }),
+      ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+    },
+  });
+
+  return successResponse(res, 200, 'Resume updated successfully', updated);
+};
 
 /**
- * Delete resume
+ * Delete Resume
  * DELETE /api/resume/:id
  */
-async function deleteResume(req, res) {
+export const deleteResume = async (req, res) => {
   const { id } = req.params;
 
-  await resumeService.deleteResume(id);
+  const existing = await prisma.resume.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Resume not found');
+  }
 
-  return successResponse(res, null, 'Resume deleted successfully');
-}
+  if (existing.publicId && !existing.publicId.startsWith('local-')) {
+    cloudinaryService.deleteFile(existing.publicId, 'raw').catch(() => {});
+  }
+
+  await prisma.resume.delete({ where: { id } });
+
+  return successResponse(res, 200, 'Resume deleted successfully');
+};
 
 /**
- * Download active resume as an attachment
+ * Download Resume (Strict Attachment)
  * GET /api/resume/download
  */
-async function downloadResume(req, res) {
-  const activeResume = await resumeService.getActiveResume();
+export const downloadResume = async (req, res) => {
+  const resume = await prisma.resume.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: 'desc' },
+  });
 
-  if (!activeResume) {
-    return errorResponse(res, 'No resume available for download', 404);
-  }
+  const fileUrl = resume?.fileUrl || '/resume.pdf';
+  const filename = resume?.fileName || 'Dhanush-M-Resume.pdf';
 
-  try {
-    const { stream, size } = await fileService.getFileStream(activeResume.fileUrl);
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="Dhanush-M-Resume.pdf"');
-    if (size) {
-      res.setHeader('Content-Length', size);
-    }
-
-    stream.pipe(res);
-  } catch (error) {
-    console.error('[ResumeDownload] Streaming failed:', error.message);
-    return errorResponse(res, 'Failed to download resume file', 500);
-  }
-}
+  return resumeService.pipePdfStream(fileUrl, res, true, filename);
+};
 
 /**
- * View or preview active resume inline in browser
- * GET /api/resume/view or GET /api/resume/preview
+ * View Resume in Browser (Inline Disposition)
+ * GET /api/resume/view
  */
-async function viewResume(req, res) {
-  const activeResume = await resumeService.getActiveResume();
+export const viewResume = async (req, res) => {
+  const resume = await prisma.resume.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: 'desc' },
+  });
 
-  if (!activeResume) {
-    return errorResponse(res, 'No resume available for preview', 404);
-  }
+  const fileUrl = resume?.fileUrl || '/resume.pdf';
+  const filename = resume?.fileName || 'Dhanush-M-Resume.pdf';
 
-  try {
-    const { stream, size } = await fileService.getFileStream(activeResume.fileUrl);
+  return resumeService.pipePdfStream(fileUrl, res, false, filename);
+};
 
-    res.setHeader('Content-Type', activeResume.fileType || 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename="Dhanush-M-Resume.pdf"');
-    if (size) {
-      res.setHeader('Content-Length', size);
-    }
-
-    stream.pipe(res);
-  } catch (error) {
-    console.error('[ResumeView] Streaming failed:', error.message);
-    return errorResponse(res, 'Failed to stream resume file for preview', 500);
-  }
-}
-
-module.exports = {
+export default {
   getResume,
   uploadResume,
   updateResume,
@@ -207,4 +151,3 @@ module.exports = {
   downloadResume,
   viewResume,
 };
-

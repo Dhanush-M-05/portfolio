@@ -1,16 +1,20 @@
-const express = require('express');
-const router = express.Router();
-const navigationController = require('../controllers/navigationController');
-const asyncHandler = require('../utils/asyncHandler');
-const { authenticate } = require('../middleware/authMiddleware');
+import { Router } from 'express';
+import {
+  getNavigation,
+  createNavigationItem,
+  updateNavigationItem,
+  updateNavigation,
+  deleteNavigationItem,
+} from '../controllers/navigationController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public
-router.get('/', asyncHandler(navigationController.getNavigationItems));
+const router = Router();
 
-// Admin Protected
-router.post('/', authenticate, asyncHandler(navigationController.createNavigationItem));
-router.put('/', authenticate, asyncHandler(navigationController.updateNavigation));
-router.put('/:id', authenticate, asyncHandler(navigationController.updateNavigationItem));
-router.delete('/:id', authenticate, asyncHandler(navigationController.deleteNavigationItem));
+router.get('/', asyncHandler(getNavigation));
+router.post('/', requireAuth, asyncHandler(createNavigationItem));
+router.put('/', requireAuth, asyncHandler(updateNavigation));
+router.put('/:id', requireAuth, asyncHandler(updateNavigationItem));
+router.delete('/:id', requireAuth, asyncHandler(deleteNavigationItem));
 
-module.exports = router;
+export default router;

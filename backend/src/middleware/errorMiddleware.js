@@ -1,88 +1,78 @@
-const environment = require('../config/environment');
-const { errorResponse } = require('../utils/apiResponse');
+import ENV from '../config/environment.js';
 
-/**
- * 404 Not Found handler for undefined routes
- */
-function notFoundHandler(req, res, next) {
-  return errorResponse(res, `Route not found: ${req.method} ${req.originalUrl}`, 404);
-}
+export const errorHandler = (err, req, res, next) => {
+  let statusCode = err.statusCode || res.statusCode || 500;
+  if (statusCode < 400) statusCode = 500;
 
-/**
- * Centralized error handler
- */
-function errorHandler(err, req, res, next) {
-  // Always log errors on the server console (without leaking passwords/secrets)
-  console.error('[Error] Global Error Handler:', {
-    message: err.message,
-    status: err.status || err.statusCode,
-    code: err.code,
-    path: req.originalUrl,
-    method: req.method,
-    ...(environment.IS_PRODUCTION ? {} : { stack: err.stack }),
-  });
+  let message = err.message || 'Internal Server Error';
+  let errors = err.errors || null;
 
-  // Handle JSON parse error (e.g. malformed body)
-  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-    return errorResponse(res, 'Malformed JSON payload provided in request body.', 400);
-  }
-
-  // Handle Prisma Database Errors
-  if (err.code) {
-    switch (err.code) {
-      case 'P2002': {
-        const fields = err.meta?.target ? (Array.isArray(err.meta.target) ? err.meta.target.join(', ') : err.meta.target) : 'field';
-        return errorResponse(
-          res,
-          `A record with this ${fields} already exists. Duplicate values are not allowed.`,
-          409
-        );
-      }
-      case 'P2025': {
-        return errorResponse(
-          res,
-          err.meta?.cause || 'Requested record was not found.',
-          404
-        );
-      }
-      case 'P2003': {
-        return errorResponse(
-          res,
-          'Foreign key constraint failed. Related record does not exist.',
-          400
-        );
-      }
-      case 'P2014': {
-        return errorResponse(
-          res,
-          'The change you are trying to make would violate a required relationship.',
-          400
-        );
-      }
-      default:
-        break;
+  // Handle Multer upload errors
+  if (err.name === 'MulterError') {
+    statusCode = 400;
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      message = 'File is too large. Maximum allowed size is 15MB.';
+    } else {
+      message = `File upload error: ${err.message}`;
     }
   }
 
-  // Handle JWT errors
+  // Handle Prisma Database errors
+  if (err.code && typeof err.code === 'string' && err.code.startsWith('P')) {
+    switch (err.code) {
+      case 'P2002': {
+        statusCode = 409;
+        const target = err.meta?.target ? ` (${err.meta.target})` : '';
+        message = `A record with this unique field already exists${target}.`;
+        break;
+      }
+      case 'P2025': {
+        statusCode = 404;
+        message = 'The requested database record was not found.';
+        break;
+      }
+      case 'P2003': {
+        statusCode = 400;
+        message = 'Foreign key constraint failed.';
+        break;
+      }
+      default: {
+        statusCode = 500;
+        message = 'Database operation failed.';
+      }
+    }
+  }
+
+  // Handle JSON Web Token errors
   if (err.name === 'JsonWebTokenError') {
-    return errorResponse(res, 'Invalid authentication token.', 401);
+    statusCode = 401;
+    message = 'Invalid authentication token.';
+  } else if (err.name === 'TokenExpiredError') {
+    statusCode = 401;
+    message = 'Authentication token expired.';
   }
-  if (err.name === 'TokenExpiredError') {
-    return errorResponse(res, 'Authentication token has expired. Please log in again.', 401);
+
+  // Log error securely
+  if (ENV.NODE_ENV !== 'production') {
+    console.error('🚨 Error Handler:', err);
+  } else {
+    console.error(`🚨 [${new Date().toISOString()}] ${req.method} ${req.originalUrl}:`, err.message);
   }
 
-  // Handle custom status codes attached to errors
-  const statusCode = err.status || err.statusCode || 500;
-  const message =
-    statusCode === 500 && environment.IS_PRODUCTION
-      ? 'An unexpected internal server error occurred.'
-      : err.message || 'Internal server error';
+  const responsePayload = {
+    success: false,
+    message,
+  };
 
-  return errorResponse(res, message, statusCode);
-}
+  if (errors) {
+    responsePayload.errors = errors;
+  }
 
-module.exports = {
-  notFoundHandler,
-  errorHandler,
+  if (ENV.NODE_ENV === 'development' && err.stack) {
+    responsePayload.stack = err.stack;
+  }
+
+  return res.status(statusCode).json(responsePayload);
 };
+
+export default errorHandler;

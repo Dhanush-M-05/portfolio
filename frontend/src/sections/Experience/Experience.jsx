@@ -12,6 +12,10 @@ export const Experience = () => {
     .filter((item) => item.isVisible !== false)
     .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
 
+  if (!activeExperience || activeExperience.length === 0) {
+    return null;
+  }
+
   return (
     <section id="experience" className="section experience-section">
       <div className="container">

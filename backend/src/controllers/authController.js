@@ -1,87 +1,127 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { prisma } = require('../config/database');
-const environment = require('../config/environment');
-const { successResponse, errorResponse } = require('../utils/apiResponse');
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import prisma from '../config/database.js';
+import ENV from '../config/environment.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
  * Admin Login
  * POST /api/auth/login
  */
-async function login(req, res) {
-  const { email, password } = req.body;
+export const login = async (req, res) => {
+  const { email, usernameOrEmail, username, password } = req.body;
+  const identifier = (email || usernameOrEmail || username || '').trim();
 
-  // Search admin user by email
-  const admin = await prisma.adminUser.findUnique({
-    where: { email: email.toLowerCase() },
+  if (!identifier || !password) {
+    return errorResponse(res, 400, 'Please provide email and password');
+  }
+
+  const user = await prisma.adminUser.findFirst({
+    where: {
+      OR: [
+        { email: identifier },
+        { username: identifier },
+      ],
+    },
   });
 
-  if (!admin) {
-    return errorResponse(res, 'Invalid email or password credentials.', 401);
+  if (!user) {
+    return errorResponse(res, 401, 'Invalid email or password');
   }
 
-  // Verify bcrypt password
-  const isMatch = await bcrypt.compare(password, admin.password);
-  if (!isMatch) {
-    return errorResponse(res, 'Invalid email or password credentials.', 401);
+  const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+  if (!isPasswordValid) {
+    return errorResponse(res, 401, 'Invalid email or password');
   }
 
-  // Generate JWT token
   const token = jwt.sign(
-    {
-      id: admin.id,
-      email: admin.email,
-      role: admin.role,
-    },
-    environment.JWT_SECRET,
-    { expiresIn: environment.JWT_EXPIRES_IN }
+    { id: user.id, email: user.email, role: user.role },
+    ENV.JWT_SECRET,
+    { expiresIn: ENV.JWT_EXPIRES_IN }
   );
 
-  // Return token and sanitized admin user details (no password)
-  const safeAdmin = {
-    id: admin.id,
-    name: admin.name,
-    email: admin.email,
-    role: admin.role,
-    createdAt: admin.createdAt,
-    updatedAt: admin.updatedAt,
+  const userData = {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    role: user.role,
   };
 
-  return successResponse(
-    res,
-    {
-      token,
-      user: safeAdmin,
-    },
-    'Login successful',
-    200
-  );
-}
+  return successResponse(res, 200, 'Login successful', {
+    token,
+    user: userData,
+  });
+};
 
 /**
  * Admin Logout
  * POST /api/auth/logout
  */
-async function logout(req, res) {
-  // Clear any auth cookies if present; client is instructed to delete token
-  return successResponse(res, null, 'Logged out successfully', 200);
-}
+export const logout = async (req, res) => {
+  return successResponse(res, 200, 'Logged out successfully');
+};
 
 /**
- * Get current logged in admin
+ * Get current admin user
  * GET /api/auth/me
  */
-async function getMe(req, res) {
-  return successResponse(
-    res,
-    req.user,
-    'Current user profile retrieved',
-    200
-  );
-}
+export const getMe = async (req, res) => {
+  return successResponse(res, 200, 'Admin details retrieved', req.user);
+};
 
-module.exports = {
+/**
+ * Verify current token
+ * GET /api/auth/verify
+ */
+export const verify = async (req, res) => {
+  return res.status(200).json({
+    success: true,
+    valid: true,
+    user: req.user,
+  });
+};
+
+/**
+ * Change Admin Password
+ * PUT /api/auth/password
+ */
+export const changePassword = async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 6) {
+    return errorResponse(res, 400, 'New password must be at least 6 characters long');
+  }
+
+  const user = await prisma.adminUser.findUnique({
+    where: { id: req.user.id },
+  });
+
+  if (!user) {
+    return errorResponse(res, 404, 'Admin account not found');
+  }
+
+  if (currentPassword) {
+    const isCurrentValid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isCurrentValid) {
+      return errorResponse(res, 400, 'Current password is incorrect');
+    }
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+  await prisma.adminUser.update({
+    where: { id: user.id },
+    data: { passwordHash: hashedPassword },
+  });
+
+  return successResponse(res, 200, 'Admin password updated successfully');
+};
+
+export default {
   login,
   logout,
   getMe,
+  verify,
+  changePassword,
 };
+

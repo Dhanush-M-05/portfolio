@@ -1,152 +1,117 @@
-const { prisma } = require('../config/database');
-const { successResponse, errorResponse } = require('../utils/apiResponse');
-
-function formatEducation(edu) {
-  if (!edu) return edu;
-  return {
-    ...edu,
-    period: edu.startYear ? `${edu.startYear}${edu.endYear ? ` – ${edu.endYear}` : ''}` : '',
-  };
-}
+import prisma from '../config/database.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Get all educations
+ * Get Educations
  * GET /api/education
  */
-async function getEducations(req, res) {
-  const { all } = req.query;
-  const where = all === 'true' ? {} : { isActive: true };
+export const getEducation = async (req, res) => {
+  const showAll = req.query.all === 'true';
+  const where = showAll ? {} : { isActive: true };
 
   const educations = await prisma.education.findMany({
     where,
     orderBy: { order: 'asc' },
   });
 
-  return successResponse(res, educations.map(formatEducation), 'Education records retrieved successfully');
-}
+  return successResponse(res, 200, 'Education records retrieved', educations);
+};
 
 /**
- * Get single education by ID
+ * Get Education by ID
  * GET /api/education/:id
  */
-async function getEducationById(req, res) {
+export const getEducationById = async (req, res) => {
   const { id } = req.params;
-
   const education = await prisma.education.findUnique({
-    where: { id: Number(id) },
+    where: { id },
   });
 
   if (!education) {
-    return errorResponse(res, 'Education record not found', 404);
+    return errorResponse(res, 404, 'Education record not found');
   }
 
-  return successResponse(res, formatEducation(education), 'Education record retrieved successfully');
-}
+  return successResponse(res, 200, 'Education record retrieved', education);
+};
 
 /**
- * Create education
+ * Create Education
  * POST /api/education
  */
-async function createEducation(req, res) {
-  const {
-    institution,
-    degree,
-    department,
-    startYear,
-    endYear,
-    grade,
-    description,
-    order,
-    isActive,
-  } = req.body;
+export const createEducation = async (req, res) => {
+  const { institution, degree, department, startYear, endYear, grade, description, order, isActive } = req.body;
 
   if (!institution || !degree) {
-    return errorResponse(res, 'Institution and degree are required', 400);
-  }
-
-  let sYear = startYear;
-  let eYear = endYear;
-  if (!sYear && req.body.period) {
-    const parts = req.body.period.split('–').map((s) => s.trim());
-    sYear = parts[0] || null;
-    eYear = parts[1] || null;
+    return errorResponse(res, 400, 'Institution and degree are required');
   }
 
   const newEducation = await prisma.education.create({
     data: {
       institution,
       degree,
-      department: department || null,
-      startYear: sYear || null,
-      endYear: eYear || null,
-      grade: grade || null,
-      description: description || null,
+      department: department || '',
+      startYear: startYear || '',
+      endYear: endYear || '',
+      grade: grade || '',
+      description: description || '',
       order: order !== undefined ? Number(order) : 0,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     },
   });
 
-  return successResponse(res, formatEducation(newEducation), 'Education record created successfully', 201);
-}
+  return successResponse(res, 201, 'Education created successfully', newEducation);
+};
 
 /**
- * Update education
+ * Update Education
  * PUT /api/education/:id
  */
-async function updateEducation(req, res) {
+export const updateEducation = async (req, res) => {
   const { id } = req.params;
-  const {
-    institution,
-    degree,
-    department,
-    startYear,
-    endYear,
-    grade,
-    description,
-    order,
-    isActive,
-  } = req.body;
+  const data = req.body;
 
-  const updateData = {};
-  if (institution !== undefined) updateData.institution = institution;
-  if (degree !== undefined) updateData.degree = degree;
-  if (department !== undefined) updateData.department = department;
-  if (startYear !== undefined) updateData.startYear = startYear;
-  if (endYear !== undefined) updateData.endYear = endYear;
-  if (req.body.period && !startYear && !endYear) {
-    const parts = req.body.period.split('–').map((s) => s.trim());
-    updateData.startYear = parts[0] || null;
-    updateData.endYear = parts[1] || null;
+  const existing = await prisma.education.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Education record not found');
   }
-  if (grade !== undefined) updateData.grade = grade;
-  if (description !== undefined) updateData.description = description;
-  if (order !== undefined) updateData.order = Number(order);
-  if (isActive !== undefined) updateData.isActive = Boolean(isActive);
 
-  const updatedEducation = await prisma.education.update({
-    where: { id: Number(id) },
-    data: updateData,
+  const updated = await prisma.education.update({
+    where: { id },
+    data: {
+      ...(data.institution !== undefined && { institution: data.institution }),
+      ...(data.degree !== undefined && { degree: data.degree }),
+      ...(data.department !== undefined && { department: data.department }),
+      ...(data.startYear !== undefined && { startYear: data.startYear }),
+      ...(data.endYear !== undefined && { endYear: data.endYear }),
+      ...(data.grade !== undefined && { grade: data.grade }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.order !== undefined && { order: Number(data.order) }),
+      ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
+    },
   });
 
-  return successResponse(res, formatEducation(updatedEducation), 'Education record updated successfully');
-}
+  return successResponse(res, 200, 'Education updated successfully', updated);
+};
 
 /**
- * Delete education
+ * Delete Education
  * DELETE /api/education/:id
  */
-async function deleteEducation(req, res) {
+export const deleteEducation = async (req, res) => {
   const { id } = req.params;
 
-  await prisma.education.delete({
-    where: { id: Number(id) },
-  });
+  const existing = await prisma.education.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Education record not found');
+  }
 
-  return successResponse(res, null, 'Education record deleted successfully');
-}
+  await prisma.education.delete({ where: { id } });
 
-module.exports = {
-  getEducations,
+  return successResponse(res, 200, 'Education deleted successfully');
+};
+
+export default {
+  getEducation,
   getEducationById,
   createEducation,
   updateEducation,

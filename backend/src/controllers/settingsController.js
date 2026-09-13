@@ -1,76 +1,65 @@
-const { prisma } = require('../config/database');
-const { successResponse } = require('../utils/apiResponse');
+import prisma from '../config/database.js';
+import { successResponse } from '../utils/apiResponse.js';
 
 /**
- * Helper to get or create singleton WebsiteSettings
+ * Get Website Settings
+ * GET /api/settings
  */
-async function getOrCreateSettings() {
+export const getSettings = async (req, res) => {
   let settings = await prisma.websiteSettings.findFirst();
+
   if (!settings) {
     settings = await prisma.websiteSettings.create({
       data: {
-        siteTitle: 'Dhanush M | Portfolio',
-        siteDescription: 'Personal portfolio of Dhanush M, Full Stack Web Developer.',
-        faviconUrl: '/favicon.ico',
-        metaKeywords: 'Dhanush M, Web Developer, Full Stack Developer, React, Node.js, Spring Boot, MySQL',
-        googleAnalyticsId: null,
+        siteTitle: 'Dhanush M | Web Developer Portfolio',
+        siteDescription: 'Full Stack Web Developer portfolio of Dhanush M showcasing projects, technical skills, certifications, and experience.',
+        favicon: '/favicon.ico',
+        metaKeywords: 'Dhanush M, Web Developer, Full Stack, React, Node.js, Express, MySQL, Portfolio',
+        brandName: 'Dhanush M',
+        brandRole: 'Web Developer',
+        logoLetters: 'DM',
+        resumeBtnText: 'Resume',
+        talkBtnText: "Let's Talk",
         maintenanceMode: false,
       },
     });
   }
-  return settings;
-}
+
+  return successResponse(res, 200, 'Website settings retrieved', settings);
+};
 
 /**
- * Get website settings
- * GET /api/settings
- */
-async function getSettings(req, res) {
-  const settings = await getOrCreateSettings();
-  return successResponse(res, settings, 'Website settings retrieved successfully');
-}
-
-/**
- * Update website settings
+ * Update Website Settings
  * PUT /api/settings
  */
-async function updateSettings(req, res) {
-  const existing = await getOrCreateSettings();
+export const updateSettings = async (req, res) => {
+  let settings = await prisma.websiteSettings.findFirst();
+  const updateData = { ...req.body };
 
-  const allowedFields = [
-    'siteTitle',
-    'siteDescription',
-    'faviconUrl',
-    'metaKeywords',
-    'googleAnalyticsId',
-    'maintenanceMode',
-    'brandName',
-    'brandRole',
-    'logoLetters',
-    'resumeBtnText',
-    'talkBtnText',
-  ];
+  delete updateData.id;
+  delete updateData.createdAt;
+  delete updateData.updatedAt;
 
-  const updateData = {};
-  for (const field of allowedFields) {
-    if (req.body[field] !== undefined) {
-      if (field === 'maintenanceMode') {
-        updateData[field] = Boolean(req.body[field]);
-      } else {
-        updateData[field] = req.body[field];
-      }
-    }
+  if (Array.isArray(updateData.logoLetters)) {
+    updateData.logoLetters = updateData.logoLetters.join('');
   }
 
-  const updated = await prisma.websiteSettings.update({
-    where: { id: existing.id },
-    data: updateData,
-  });
+  let updated;
+  if (settings) {
+    updated = await prisma.websiteSettings.update({
+      where: { id: settings.id },
+      data: updateData,
+    });
+  } else {
+    updated = await prisma.websiteSettings.create({
+      data: updateData,
+    });
+  }
 
-  return successResponse(res, updated, 'Website settings updated successfully');
-}
+  return successResponse(res, 200, 'Website settings updated successfully', updated);
+};
 
-module.exports = {
+export default {
   getSettings,
   updateSettings,
 };

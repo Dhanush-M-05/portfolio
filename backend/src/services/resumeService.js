@@ -1,121 +1,111 @@
-const { prisma } = require('../config/database');
-const fileService = require('./fileService');
+import prisma from '../config/database.js';
+import cloudinaryService from './cloudinaryService.js';
+import https from 'https';
+import http from 'http';
+import fs from 'fs';
+import path from 'path';
 
 /**
- * Retrieves the currently active resume
+ * Upload new resume PDF, update DB, mark previous inactive, and cleanup old asset
  */
-async function getActiveResume() {
-  const activeResume = await prisma.resume.findFirst({
+export const processResumeUpload = async (file, title = 'ATS-Compliant Software Developer Resume') => {
+  if (!file || !file.buffer) {
+    throw new Error('Valid PDF resume file is required');
+  }
+
+  if (file.mimetype !== 'application/pdf') {
+    throw new Error('Resume must be a PDF file only');
+  }
+
+  // 1. Get currently active resume to delete later
+  const currentResume = await prisma.resume.findFirst({
     where: { isActive: true },
-    orderBy: { uploadedAt: 'desc' },
   });
 
-  if (!activeResume) {
-    // Fall back to most recent resume if none marked active
-    return prisma.resume.findFirst({
-      orderBy: { uploadedAt: 'desc' },
+  // 2. Upload to Cloudinary folder portfolio/resume/
+  const uploadResult = await cloudinaryService.uploadBuffer(file.buffer, 'portfolio/resume', {
+    resource_type: 'raw',
+  });
+
+  const fileUrl = uploadResult.secure_url || uploadResult.url;
+  const publicId = uploadResult.public_id;
+
+  // 3. Mark old resumes inactive
+  await prisma.resume.updateMany({
+    where: { isActive: true },
+    data: { isActive: false },
+  });
+
+  // 4. Create new active resume record in MySQL
+  const newResume = await prisma.resume.create({
+    data: {
+      title,
+      fileName: file.originalname || 'Dhanush-M-Resume.pdf',
+      fileUrl,
+      publicId,
+      mimeType: 'application/pdf',
+      fileSize: file.size,
+      isActive: true,
+    },
+  });
+
+  // 5. Delete old Cloudinary asset only after new upload and DB update succeed
+  if (currentResume && currentResume.publicId && !currentResume.publicId.startsWith('local-')) {
+    cloudinaryService.deleteFile(currentResume.publicId, 'raw').catch((err) => {
+      console.warn('Could not remove previous resume from Cloudinary:', err.message);
     });
   }
 
-  return activeResume;
-}
+  return newResume;
+};
 
 /**
- * Creates a new resume within a Prisma transaction, deactivating existing active resumes
+ * Stream a PDF file (Cloudinary or local) directly to the client response with attachment headers
  */
-async function createResumeWithTransaction({ fileName, fileUrl, cloudinaryPublicId, fileType, fileSize, makeActive = true }) {
-  return prisma.$transaction(async (tx) => {
-    if (makeActive) {
-      await tx.resume.updateMany({
-        where: { isActive: true },
-        data: { isActive: false },
-      });
-    }
+export const pipePdfStream = (url, res, isDownload = true, filename = 'Dhanush-M-Resume.pdf') => {
+  // If local fallback file
+  if (url.startsWith('/')) {
+    const candidatePaths = [
+      path.resolve(process.cwd(), '../frontend/public' + url),
+      path.resolve(process.cwd(), 'public' + url),
+      path.resolve(process.cwd(), '../scratch/sample_cv_2026.pdf'),
+    ];
 
-    const newResume = await tx.resume.create({
-      data: {
-        fileName,
-        fileUrl,
-        cloudinaryPublicId: cloudinaryPublicId || null,
-        fileType: fileType || 'application/pdf',
-        fileSize: fileSize || 0,
-        isActive: makeActive,
-      },
-    });
-
-    return newResume;
-  });
-}
-
-/**
- * Updates a resume, ensuring single active resume in a transaction if isActive is set to true
- */
-async function updateResumeWithTransaction(id, updateData) {
-  return prisma.$transaction(async (tx) => {
-    if (updateData.isActive === true) {
-      await tx.resume.updateMany({
-        where: {
-          isActive: true,
-          id: { not: Number(id) },
-        },
-        data: { isActive: false },
-      });
-    }
-
-    const updated = await tx.resume.update({
-      where: { id: Number(id) },
-      data: updateData,
-    });
-
-    return updated;
-  });
-}
-
-/**
- * Deletes a resume record and associated file
- */
-async function deleteResume(id) {
-  const resume = await prisma.resume.findUnique({
-    where: { id: Number(id) },
-  });
-
-  if (!resume) {
-    const error = new Error('Resume not found');
-    error.status = 404;
-    throw error;
-  }
-
-  // Delete from Cloudinary if present
-  if (resume.cloudinaryPublicId) {
-    await fileService.deleteFile(resume.cloudinaryPublicId, { resource_type: 'raw' }).catch((err) => {
-      console.warn('[Resume] Failed to delete Cloudinary file:', err.message);
-    });
-  }
-
-  // Delete DB record
-  await prisma.resume.delete({
-    where: { id: Number(id) },
-  });
-
-  // If the deleted resume was active, ensure the latest remaining resume is activated
-  if (resume.isActive) {
-    const latestRemaining = await prisma.resume.findFirst({
-      orderBy: { uploadedAt: 'desc' },
-    });
-    if (latestRemaining) {
-      await prisma.resume.update({
-        where: { id: latestRemaining.id },
-        data: { isActive: true },
-      });
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader(
+          'Content-Disposition',
+          `${isDownload ? 'attachment' : 'inline'}; filename="${filename}"`
+        );
+        return fs.createReadStream(p).pipe(res);
+      }
     }
   }
 
-  return resume;
-}
+  const client = url.startsWith('https') ? https : http;
+  client.get(url, (remoteRes) => {
+    // Follow redirect if Cloudinary redirects
+    if (remoteRes.statusCode === 301 || remoteRes.statusCode === 302) {
+      return pipePdfStream(remoteRes.headers.location, res, isDownload, filename);
+    }
 
-module.exports = {
-  getActiveResume,
-  createResumeWithTransaction,
-  updateResumeWithTransaction,
-  deleteResume,
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `${isDownload ? 'attachment' : 'inline'}; filename="${filename}"`
+    );
+
+    remoteRes.pipe(res);
+  }).on('error', (err) => {
+    console.error('Failed to stream resume PDF:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Failed to stream resume document' });
+    }
+  });
+};
+
+export default {
+  processResumeUpload,
+  pipePdfStream,
 };

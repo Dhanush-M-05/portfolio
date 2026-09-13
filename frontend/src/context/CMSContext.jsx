@@ -1,14 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import profileConfig from '../config/profile';
-import { projectsData } from '../data/projects';
-import skillsData from '../data/skills';
-import servicesData from '../data/services';
-import { experienceData } from '../data/experience';
-import { educationData } from '../data/education';
-import { certificationsData } from '../data/certifications';
-import socialLinksData from '../data/socialLinks';
 
-// Import service layers
+// Import service layers (Authoritative Backend APIs)
 import * as profileService from '../services/profileService';
 import * as projectService from '../services/projectService';
 import * as skillService from '../services/skillService';
@@ -27,91 +19,50 @@ import * as footerService from '../services/footerService';
 
 const CMSContext = createContext(null);
 
-// Helper for initial state with localStorage fallback
-const getInitialState = (key, fallback) => {
+// Purge legacy cms_* keys from browser localStorage
+const purgeLegacyLocalStorage = () => {
   try {
-    const saved = localStorage.getItem(`cms_${key}`);
-    return saved ? JSON.parse(saved) : fallback;
-  } catch {
-    return fallback;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('cms_') || key === 'cms_about')) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+    }
+  } catch (err) {
+    console.warn('Failed to purge legacy CMS localStorage keys:', err);
   }
 };
 
-const saveState = (key, data) => {
-  try {
-    localStorage.setItem(`cms_${key}`, JSON.stringify(data));
-  } catch (err) {
-    console.warn(`Failed to save cms_${key} to localStorage:`, err);
-  }
-};
+// Immediate cleanup on script evaluation
+purgeLegacyLocalStorage();
 
 export const CMSProvider = ({ children }) => {
-  const [profile, setProfile] = useState(() => {
-    const saved = getInitialState('profile', profileConfig);
-    const avatar = saved?.image || saved?.avatarUrl || profileConfig.avatarUrl || profileConfig.image || '/dhanush-profile.jpg';
-    return {
-      ...profileConfig,
-      ...saved,
-      degree: saved?.degree || profileConfig.degree || 'B.E.',
-      department: saved?.department || profileConfig.department || 'Computer Science and Engineering',
-      college: saved?.college || profileConfig.college || 'J.N.N Institute',
-      avatarUrl: avatar,
-      image: avatar,
-    };
-  });
-  const [projects, setProjects] = useState(() => {
-    const saved = getInitialState('projects', projectsData);
-    return saved.map(p => ({
-      ...p,
-      githubUrl: p.githubUrl ? p.githubUrl.replace('dhanush-m', 'Dhanush-M-05') : p.githubUrl
-    }));
-  });
-  const [skills, setSkills] = useState(() => getInitialState('skills', skillsData.skills));
-  const [skillCategories, setSkillCategories] = useState(() => getInitialState('categories', skillsData.categories));
-  const [services, setServices] = useState(() => getInitialState('services', servicesData));
-  const [experience, setExperience] = useState(() => getInitialState('experience', experienceData));
-  const [education, setEducation] = useState(() => getInitialState('education', educationData));
-  const [certifications, setCertifications] = useState(() => getInitialState('certifications', certificationsData));
-  const [achievements, setAchievements] = useState(() => getInitialState('achievements', []));
-  const [socialLinks, setSocialLinks] = useState(() => {
-    const saved = getInitialState('socialLinks', socialLinksData);
-    return saved.map(item => {
-      const lower = (item.name || item.platform || item.label || '').toLowerCase();
-      if (lower === 'github') {
-        return {
-          ...item,
-          url: 'https://github.com/Dhanush-M-05',
-          username: '@Dhanush-M-05'
-        };
-      }
-      if (lower === 'linkedin') {
-        return {
-          ...item,
-          url: 'https://www.linkedin.com/in/dhanush151005/',
-          username: 'in/dhanush151005'
-        };
-      }
-      return item;
-    });
-  });
-  const [resume, setResume] = useState(() => getInitialState('resume', {
-    fileName: "Dhanush_M_Web_Developer_Resume.pdf",
-    filePath: "/resume.pdf",
-    fileSize: "184 KB",
-    lastUpdated: "2026-09-02",
-    version: "1.2.0"
-  }));
-  const [messages, setMessages] = useState(() => getInitialState('messages', []));
-  const [settings, setSettings] = useState(() => getInitialState('settings', {
-    siteTitle: "Dhanush M — Web Developer",
-    browserTitle: "Dhanush M | Web Developer Portfolio",
-    metaDescription: "Personal portfolio of Dhanush M, a Web Developer specializing in building modern, responsive, and scalable web experiences.",
-    metaKeywords: "Web Developer, React, Node.js, Django, Portfolio, Chennai, Full Stack",
-    authorName: "Dhanush M",
-    ogTitle: "Dhanush M — Web Developer Portfolio",
-    ogDescription: "Explore projects, technical skills, and software engineering experience of Dhanush M.",
-    footerText: "Designed & Built with React and Pure CSS.",
-  }));
+  // Initial default structures (without hardcoded mock/dummy entries)
+  const defaultProfile = {
+    name: '',
+    role: '',
+    title: '',
+    degree: '',
+    department: '',
+    college: '',
+    email: '',
+    phone: '',
+    domain: '',
+    location: '',
+    tagline: '',
+    heroDescription: '',
+    aboutHeading: '',
+    aboutSubheading: '',
+    avatarUrl: '/dhanush-profile.jpg',
+    image: '/dhanush-profile.jpg',
+    resumePath: '/resume.pdf',
+    resumeViewRoute: '/resume',
+    stats: [],
+  };
 
   const defaultSections = [
     { id: "hero", name: "Hero", isVisible: true, order: 1, greeting: "HELLO, I'M" },
@@ -165,12 +116,24 @@ export const CMSProvider = ({ children }) => {
     copyrightText: "Designed & Built with React and Pure CSS."
   };
 
-  const [sections, setSections] = useState(() => getInitialState('sections', defaultSections));
-  const [navigation, setNavigation] = useState(() => getInitialState('navigation', defaultNavigation));
-  const [hero, setHero] = useState(() => getInitialState('hero', defaultHero));
-  const [footer, setFooter] = useState(() => getInitialState('footer', defaultFooter));
-
-  // Authoritative About data strictly from Backend API (No localStorage persistence)
+  // Pure React states - Strictly driven by backend API
+  const [profile, setProfile] = useState(defaultProfile);
+  const [projects, setProjects] = useState([]);
+  const [skills, setSkills] = useState([]);
+  const [skillCategories, setSkillCategories] = useState([]);
+  const [services, setServices] = useState([]);
+  const [experience, setExperience] = useState([]);
+  const [education, setEducation] = useState([]);
+  const [certifications, setCertifications] = useState([]);
+  const [achievements, setAchievements] = useState([]);
+  const [socialLinks, setSocialLinks] = useState([]);
+  const [resume, setResume] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [settings, setSettings] = useState({});
+  const [sections, setSections] = useState(defaultSections);
+  const [navigation, setNavigation] = useState(defaultNavigation);
+  const [hero, setHero] = useState(defaultHero);
+  const [footer, setFooter] = useState(defaultFooter);
   const [about, setAbout] = useState(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -181,11 +144,9 @@ export const CMSProvider = ({ children }) => {
     }
   }, [settings?.siteTitle]);
 
-  // Initialize data from API or fallbacks
+  // Initial load strictly from Backend API
   useEffect(() => {
-    try {
-      localStorage.removeItem('cms_about');
-    } catch {}
+    purgeLegacyLocalStorage();
 
     const loadAll = async () => {
       try {
@@ -228,7 +189,7 @@ export const CMSProvider = ({ children }) => {
         ]);
 
         if (profData) {
-          const avatar = profData.image || profData.avatarUrl || '/dhanush-profile.jpg';
+          const avatar = profData.image || profData.avatarUrl || profData.profileImageUrl || '/dhanush-profile.jpg';
           setProfile((prev) => ({
             ...prev,
             ...profData,
@@ -239,27 +200,41 @@ export const CMSProvider = ({ children }) => {
             image: avatar,
           }));
         }
-        if (projData) setProjects(projData);
-        if (skData) {
-          setSkills(skData.skills || skData);
-          if (skData.categories) setSkillCategories(skData.categories);
+
+        if (Array.isArray(projData)) {
+          setProjects(projData);
+        } else if (projData?.projects && Array.isArray(projData.projects)) {
+          setProjects(projData.projects);
         }
-        if (srvData) setServices(srvData);
-        if (expData) setExperience(expData);
-        if (eduData) setEducation(eduData);
-        if (certData) setCertifications(certData);
-        if (achData) setAchievements(achData);
-        if (socData) setSocialLinks(socData);
+
+        if (skData) {
+          if (Array.isArray(skData)) {
+            setSkills(skData);
+          } else if (skData.skills && Array.isArray(skData.skills)) {
+            setSkills(skData.skills);
+            if (skData.categories) setSkillCategories(skData.categories);
+          }
+        }
+
+        if (Array.isArray(srvData)) setServices(srvData);
+        if (Array.isArray(expData)) setExperience(expData);
+        if (Array.isArray(eduData)) setEducation(eduData);
+        if (Array.isArray(certData)) setCertifications(certData);
+        if (Array.isArray(achData)) setAchievements(achData);
+        if (Array.isArray(socData)) setSocialLinks(socData);
         if (resData) setResume(resData);
-        if (msgData) setMessages(msgData);
+        if (Array.isArray(msgData)) setMessages(msgData);
+
         if (setData) {
           setSettings(setData);
           if (setData.siteTitle) {
             document.title = setData.siteTitle;
           }
         }
+
         if (aboutData) setAbout(aboutData);
-        if (secData) setSections(secData);
+        if (Array.isArray(secData)) setSections(secData);
+
         if (navData) {
           const links = Array.isArray(navData) ? navData : (navData.links || []);
           const mergedNav = {
@@ -283,10 +258,11 @@ export const CMSProvider = ({ children }) => {
           };
           setNavigation(mergedNav);
         }
+
         if (heroData) setHero(heroData);
         if (footData) setFooter(footData);
       } catch (err) {
-        console.warn('CMS Context initialized with local defaults:', err.message);
+        console.warn('CMS Context initialized from backend with notice:', err.message);
       } finally {
         setIsLoaded(true);
       }
@@ -306,251 +282,172 @@ export const CMSProvider = ({ children }) => {
     };
     const updated = await profileService.updateProfile(merged);
     setProfile(merged);
-    saveState('profile', merged);
     return updated;
   };
 
   // Projects actions
   const addProject = async (newProj) => {
     const created = await projectService.createProject(newProj);
-    setProjects((prev) => {
-      const updated = [created, ...prev];
-      saveState('projects', updated);
-      return updated;
-    });
+    setProjects((prev) => [created, ...prev]);
     return created;
   };
 
   const updateProject = async (id, updatedProj) => {
     const updated = await projectService.updateProject(id, updatedProj);
-    setProjects((prev) => {
-      const list = prev.map((p) => (p.id === id || p.slug === id ? { ...p, ...updated } : p));
-      saveState('projects', list);
-      return list;
-    });
+    setProjects((prev) => prev.map((p) => (p.id === id || p.slug === id ? { ...p, ...updated } : p)));
     return updated;
   };
 
   const deleteProject = async (id) => {
     await projectService.deleteProject(id);
-    setProjects((prev) => {
-      const list = prev.filter((p) => p.id !== id && p.slug !== id);
-      saveState('projects', list);
-      return list;
-    });
+    setProjects((prev) => prev.filter((p) => p.id !== id && p.slug !== id));
   };
 
   // Skills actions
   const addSkill = async (newSkill) => {
     const created = await skillService.createSkill(newSkill);
-    setSkills((prev) => {
-      const updated = [...prev, created];
-      saveState('skills', updated);
-      return updated;
-    });
+    setSkills((prev) => [...prev, created]);
     return created;
   };
 
   const updateSkill = async (name, updatedSkill) => {
     const updated = await skillService.updateSkill(name, updatedSkill);
-    setSkills((prev) => {
-      const list = prev.map((s) => (s.name === name ? { ...s, ...updated } : s));
-      saveState('skills', list);
-      return list;
-    });
+    setSkills((prev) => prev.map((s) => (s.name === name ? { ...s, ...updated } : s)));
     return updated;
   };
 
   const deleteSkill = async (name) => {
     await skillService.deleteSkill(name);
-    setSkills((prev) => {
-      const list = prev.filter((s) => s.name !== name);
-      saveState('skills', list);
-      return list;
-    });
+    setSkills((prev) => prev.filter((s) => s.name !== name));
   };
 
   // Services actions
   const addService = async (newSrv) => {
     const created = await serviceService.createService(newSrv);
-    setServices((prev) => {
-      const updated = [...prev, created];
-      saveState('services', updated);
-      return updated;
-    });
+    setServices((prev) => [...prev, created]);
     return created;
   };
 
   const updateService = async (id, updatedSrv) => {
     const updated = await serviceService.updateService(id, updatedSrv);
-    setServices((prev) => {
-      const list = prev.map((s) => (s.id === id ? { ...s, ...updated } : s));
-      saveState('services', list);
-      return list;
-    });
+    setServices((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
     return updated;
   };
 
   const deleteService = async (id) => {
     await serviceService.deleteService(id);
-    setServices((prev) => {
-      const list = prev.filter((s) => s.id !== id);
-      saveState('services', list);
-      return list;
-    });
+    setServices((prev) => prev.filter((s) => s.id !== id));
   };
 
   // Experience actions
   const addExperience = async (newExp) => {
     const created = await experienceService.createExperience(newExp);
-    const updated = [created, ...experience];
-    setExperience(updated);
-    saveState('experience', updated);
+    setExperience((prev) => [created, ...prev]);
     return created;
   };
 
   const updateExperience = async (id, updatedExp) => {
     const updated = await experienceService.updateExperience(id, updatedExp);
-    setExperience((prev) => {
-      const list = prev.map((e) => (e.id === id ? { ...e, ...updated } : e));
-      saveState('experience', list);
-      return list;
-    });
+    setExperience((prev) => prev.map((e) => (e.id === id ? { ...e, ...updated } : e)));
     return updated;
   };
 
   const deleteExperience = async (id) => {
     await experienceService.deleteExperience(id);
-    setExperience((prev) => {
-      const list = prev.filter((e) => e.id !== id);
-      saveState('experience', list);
-      return list;
-    });
+    setExperience((prev) => prev.filter((e) => e.id !== id));
     return true;
   };
 
   // Education actions
   const addEducation = async (newEdu) => {
     const created = await experienceService.createEducation(newEdu);
-    const updated = [created, ...education];
-    setEducation(updated);
-    saveState('education', updated);
+    setEducation((prev) => [created, ...prev]);
     return created;
   };
 
   const updateEducation = async (id, updatedEdu) => {
     const updated = await experienceService.updateEducation(id, updatedEdu);
-    setEducation((prev) => {
-      const list = prev.map((e) => (e.id === id ? { ...e, ...updated } : e));
-      saveState('education', list);
-      return list;
-    });
+    setEducation((prev) => prev.map((e) => (e.id === id ? { ...e, ...updated } : e)));
     return updated;
   };
 
   const deleteEducation = async (id) => {
     await experienceService.deleteEducation(id);
-    setEducation((prev) => {
-      const list = prev.filter((e) => e.id !== id);
-      saveState('education', list);
-      return list;
-    });
+    setEducation((prev) => prev.filter((e) => e.id !== id));
     return true;
   };
 
   // Certifications actions
   const addCertification = async (newCert) => {
     const created = await experienceService.createCertification(newCert);
-    const updated = [created, ...certifications];
-    setCertifications(updated);
-    saveState('certifications', updated);
+    setCertifications((prev) => [created, ...prev]);
     return created;
   };
 
   const updateCertification = async (id, updatedCert) => {
     const updated = await experienceService.updateCertifications(id, updatedCert);
-    setCertifications((prev) => {
-      const list = prev.map((c) => (c.id === id ? { ...c, ...updated } : c));
-      saveState('certifications', list);
-      return list;
-    });
+    setCertifications((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
     return updated;
   };
 
   const deleteCertification = async (id) => {
     await experienceService.deleteCertification(id);
-    setCertifications((prev) => {
-      const list = prev.filter((c) => c.id !== id);
-      saveState('certifications', list);
-      return list;
-    });
+    setCertifications((prev) => prev.filter((c) => c.id !== id));
     return true;
   };
 
   // Achievements actions
-  const addAchievement = async (item) => {
-    const created = await achievementService.createAchievement(item);
-    setAchievements((prev) => {
-      const updated = [created, ...prev];
-      saveState('achievements', updated);
-      return updated;
-    });
+  const addAchievement = async (newAch) => {
+    const created = await achievementService.createAchievement(newAch);
+    setAchievements((prev) => [created, ...prev]);
     return created;
   };
 
-  const updateAchievement = async (id, item) => {
-    const updated = await achievementService.updateAchievement(id, item);
-    setAchievements((prev) => {
-      const list = prev.map((a) => (a.id === id ? { ...a, ...updated } : a));
-      saveState('achievements', list);
-      return list;
-    });
+  const updateAchievement = async (id, updatedAch) => {
+    const updated = await achievementService.updateAchievement(id, updatedAch);
+    setAchievements((prev) => prev.map((a) => (a.id === id ? { ...a, ...updated } : a)));
     return updated;
   };
 
   const deleteAchievement = async (id) => {
     await achievementService.deleteAchievement(id);
-    setAchievements((prev) => {
-      const list = prev.filter((a) => a.id !== id);
-      saveState('achievements', list);
-      return list;
-    });
+    setAchievements((prev) => prev.filter((a) => a.id !== id));
+    return true;
   };
 
   // Social Links actions
-  const updateSocialLinksList = async (links) => {
-    const updated = await socialService.updateSocialLinks(links);
-    setSocialLinks(updated);
-    saveState('socialLinks', updated);
-    return updated;
+  const updateSocialLinksList = async (newList) => {
+    const updated = await socialService.updateSocialLinks(newList);
+    setSocialLinks(updated || newList);
+    return updated || newList;
   };
 
   // Resume actions
-  const updateResumeData = async (file) => {
-    const result = await resumeService.uploadResume(file);
-    const resumeObj = result?.data || result;
+  const updateResumeData = async (resumeData) => {
+    const updated = await resumeService.updateResume(resumeData);
+    const resumeObj = updated || resumeData;
     setResume(resumeObj);
-    saveState('resume', resumeObj);
     return resumeObj;
   };
 
-  // Messages actions
-  const markMessageRead = async (id, isRead = true) => {
-    await contactService.markMessageRead(id, isRead);
-    setMessages((prev) => {
-      const list = prev.map((m) => (m.id === id ? { ...m, isRead } : m));
-      saveState('messages', list);
-      return list;
-    });
+  // Contact Messages actions
+  const fetchMessages = async () => {
+    try {
+      const msgs = await contactService.getMessages();
+      setMessages(Array.isArray(msgs) ? msgs : []);
+    } catch (err) {
+      console.error("Failed to fetch contact messages", err);
+    }
+  };
+
+  const markMessageRead = async (id) => {
+    await (contactService.markMessageAsRead || contactService.markMessageRead)(id);
+    setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, isRead: true } : m)));
   };
 
   const deleteMessage = async (id) => {
     await contactService.deleteMessage(id);
-    setMessages((prev) => {
-      const list = prev.filter((m) => m.id !== id);
-      saveState('messages', list);
-      return list;
-    });
+    setMessages((prev) => prev.filter((m) => m.id !== id));
   };
 
   // Settings actions
@@ -559,7 +456,6 @@ export const CMSProvider = ({ children }) => {
     const updated = res?.data || res || newSettings;
     const merged = { ...settings, ...newSettings, ...updated };
     setSettings(merged);
-    saveState('settings', merged);
     if (merged.siteTitle) {
       document.title = merged.siteTitle;
     }
@@ -603,7 +499,6 @@ export const CMSProvider = ({ children }) => {
   const updateSectionsData = async (newSections) => {
     const res = await sectionService.updateSections(newSections);
     setSections(newSections);
-    saveState('sections', newSections);
     return res;
   };
 
@@ -634,15 +529,9 @@ export const CMSProvider = ({ children }) => {
     };
 
     setNavigation(mergedNav);
-    saveState('navigation', mergedNav);
 
-    // If siteTitle was updated via navigation form, update settings and document.title
     if (newNav.siteTitle) {
-      setSettings((prev) => {
-        const s = { ...prev, siteTitle: newNav.siteTitle };
-        saveState('settings', s);
-        return s;
-      });
+      setSettings((prev) => ({ ...prev, siteTitle: newNav.siteTitle }));
       document.title = newNav.siteTitle;
     }
 
@@ -653,7 +542,6 @@ export const CMSProvider = ({ children }) => {
   const updateHeroData = async (newHero) => {
     const res = await heroService.updateHero(newHero);
     setHero(newHero);
-    saveState('hero', newHero);
     return res;
   };
 
@@ -661,7 +549,6 @@ export const CMSProvider = ({ children }) => {
   const updateFooterData = async (newFooter) => {
     const res = await footerService.updateFooter(newFooter);
     setFooter(newFooter);
-    saveState('footer', newFooter);
     return res;
   };
 
@@ -710,6 +597,7 @@ export const CMSProvider = ({ children }) => {
     resume,
     updateResume: updateResumeData,
     messages,
+    fetchMessages,
     markMessageRead,
     deleteMessage,
     settings,

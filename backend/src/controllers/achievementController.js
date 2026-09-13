@@ -1,127 +1,110 @@
-const { prisma } = require('../config/database');
-const {
-  successResponse,
-  errorResponse,
-  paginatedResponse,
-} = require('../utils/apiResponse');
+import prisma from '../config/database.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Get all achievements
+ * Get Achievements
  * GET /api/achievements
  */
-async function getAchievements(req, res) {
-  const { page, limit, all } = req.query;
-
-  const where = all === 'true' ? {} : { isActive: true };
-
-  if (page || limit) {
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
-    const skip = (pageNum - 1) * limitNum;
-
-    const [total, achievements] = await Promise.all([
-      prisma.achievement.count({ where }),
-      prisma.achievement.findMany({
-        where,
-        orderBy: { order: 'asc' },
-        skip,
-        take: limitNum,
-      }),
-    ]);
-
-    return paginatedResponse(res, achievements, total, pageNum, limitNum, 'Achievements retrieved successfully');
-  }
+export const getAchievements = async (req, res) => {
+  const showAll = req.query.all === 'true';
+  const where = showAll ? {} : { isActive: true };
 
   const achievements = await prisma.achievement.findMany({
     where,
     orderBy: { order: 'asc' },
   });
 
-  return successResponse(res, achievements, 'Achievements retrieved successfully');
-}
+  return successResponse(res, 200, 'Achievements retrieved', achievements);
+};
 
 /**
- * Get single achievement by ID
+ * Get Achievement by ID
  * GET /api/achievements/:id
  */
-async function getAchievementById(req, res) {
+export const getAchievementById = async (req, res) => {
   const { id } = req.params;
-
   const achievement = await prisma.achievement.findUnique({
-    where: { id: Number(id) },
+    where: { id },
   });
 
   if (!achievement) {
-    return errorResponse(res, 'Achievement not found', 404);
+    return errorResponse(res, 404, 'Achievement not found');
   }
 
-  return successResponse(res, achievement, 'Achievement retrieved successfully');
-}
+  return successResponse(res, 200, 'Achievement retrieved', achievement);
+};
 
 /**
- * Create achievement
+ * Create Achievement
  * POST /api/achievements
  */
-async function createAchievement(req, res) {
-  const { title, description, date, link, order, isActive } = req.body;
+export const createAchievement = async (req, res) => {
+  const { title, description, date, category, order, isActive } = req.body;
 
   if (!title) {
-    return errorResponse(res, 'Title is required', 400);
+    return errorResponse(res, 400, 'Title is required');
   }
 
   const newAchievement = await prisma.achievement.create({
     data: {
       title,
-      description: description || null,
-      date: date || null,
-      link: link || null,
+      description: description || '',
+      date: date || '',
+      category: category || 'General',
       order: order !== undefined ? Number(order) : 0,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     },
   });
 
-  return successResponse(res, newAchievement, 'Achievement created successfully', 201);
-}
+  return successResponse(res, 201, 'Achievement created successfully', newAchievement);
+};
 
 /**
- * Update achievement
+ * Update Achievement
  * PUT /api/achievements/:id
  */
-async function updateAchievement(req, res) {
+export const updateAchievement = async (req, res) => {
   const { id } = req.params;
-  const { title, description, date, link, order, isActive } = req.body;
+  const data = req.body;
 
-  const updateData = {};
-  if (title !== undefined) updateData.title = title;
-  if (description !== undefined) updateData.description = description;
-  if (date !== undefined) updateData.date = date;
-  if (link !== undefined) updateData.link = link;
-  if (order !== undefined) updateData.order = Number(order);
-  if (isActive !== undefined) updateData.isActive = Boolean(isActive);
+  const existing = await prisma.achievement.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Achievement not found');
+  }
 
-  const updatedAchievement = await prisma.achievement.update({
-    where: { id: Number(id) },
-    data: updateData,
+  const updated = await prisma.achievement.update({
+    where: { id },
+    data: {
+      ...(data.title !== undefined && { title: data.title }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.date !== undefined && { date: data.date }),
+      ...(data.category !== undefined && { category: data.category }),
+      ...(data.order !== undefined && { order: Number(data.order) }),
+      ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
+    },
   });
 
-  return successResponse(res, updatedAchievement, 'Achievement updated successfully');
-}
+  return successResponse(res, 200, 'Achievement updated successfully', updated);
+};
 
 /**
- * Delete achievement
+ * Delete Achievement
  * DELETE /api/achievements/:id
  */
-async function deleteAchievement(req, res) {
+export const deleteAchievement = async (req, res) => {
   const { id } = req.params;
 
-  await prisma.achievement.delete({
-    where: { id: Number(id) },
-  });
+  const existing = await prisma.achievement.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Achievement not found');
+  }
 
-  return successResponse(res, null, 'Achievement deleted successfully');
-}
+  await prisma.achievement.delete({ where: { id } });
 
-module.exports = {
+  return successResponse(res, 200, 'Achievement deleted successfully');
+};
+
+export default {
   getAchievements,
   getAchievementById,
   createAchievement,

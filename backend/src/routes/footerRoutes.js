@@ -1,13 +1,11 @@
-const express = require('express');
-const router = express.Router();
-const footerController = require('../controllers/footerController');
-const asyncHandler = require('../utils/asyncHandler');
-const { authenticate } = require('../middleware/authMiddleware');
+import { Router } from 'express';
+import { getFooter, updateFooter } from '../controllers/footerController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public
-router.get('/', asyncHandler(footerController.getFooter));
+const router = Router();
 
-// Admin Protected
-router.put('/', authenticate, asyncHandler(footerController.updateFooter));
+router.get('/', asyncHandler(getFooter));
+router.put('/', requireAuth, asyncHandler(updateFooter));
 
-module.exports = router;
+export default router;

@@ -1,91 +1,99 @@
-const path = require('path');
-const express = require('express');
-const helmet = require('helmet');
-const cors = require('cors');
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import ENV from './config/environment.js';
+import prisma from './config/database.js';
+import errorHandler from './middleware/errorMiddleware.js';
+import { apiLimiter } from './middleware/rateLimitMiddleware.js';
 
-const environment = require('./config/environment');
-const { apiLimiter } = require('./middleware/rateLimitMiddleware');
-const { notFoundHandler, errorHandler } = require('./middleware/errorMiddleware');
-
-// Import routes
-const healthRoutes = require('./routes/healthRoutes');
-const authRoutes = require('./routes/authRoutes');
-const profileRoutes = require('./routes/profileRoutes');
-const heroRoutes = require('./routes/heroRoutes');
-const aboutRoutes = require('./routes/aboutRoutes');
-const serviceRoutes = require('./routes/serviceRoutes');
-const skillRoutes = require('./routes/skillRoutes');
-const projectRoutes = require('./routes/projectRoutes');
-const experienceRoutes = require('./routes/experienceRoutes');
-const educationRoutes = require('./routes/educationRoutes');
-const certificationRoutes = require('./routes/certificationRoutes');
-const achievementRoutes = require('./routes/achievementRoutes');
-const resumeRoutes = require('./routes/resumeRoutes');
-const socialRoutes = require('./routes/socialRoutes');
-const navigationRoutes = require('./routes/navigationRoutes');
-const footerRoutes = require('./routes/footerRoutes');
-const settingsRoutes = require('./routes/settingsRoutes');
-const contactRoutes = require('./routes/contactRoutes');
-const uploadRoutes = require('./routes/uploadRoutes');
+// Route imports
+import authRoutes from './routes/authRoutes.js';
+import profileRoutes from './routes/profileRoutes.js';
+import heroRoutes from './routes/heroRoutes.js';
+import aboutRoutes from './routes/aboutRoutes.js';
+import serviceRoutes from './routes/serviceRoutes.js';
+import skillRoutes from './routes/skillRoutes.js';
+import projectRoutes from './routes/projectRoutes.js';
+import experienceRoutes from './routes/experienceRoutes.js';
+import educationRoutes from './routes/educationRoutes.js';
+import certificationRoutes from './routes/certificationRoutes.js';
+import achievementRoutes from './routes/achievementRoutes.js';
+import resumeRoutes from './routes/resumeRoutes.js';
+import socialRoutes from './routes/socialRoutes.js';
+import navigationRoutes from './routes/navigationRoutes.js';
+import footerRoutes from './routes/footerRoutes.js';
+import settingsRoutes from './routes/settingsRoutes.js';
+import contactRoutes from './routes/contactRoutes.js';
+import homepageRoutes from './routes/homepageRoutes.js';
 
 const app = express();
 
 // Security HTTP headers
 app.use(
   helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allows static file loading cross-origin
-    frameguard: false, // Allows embedding resume documents in iframes on frontend
-    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
   })
 );
 
 // CORS configuration
-const allowedOrigins = environment.FRONTEND_URL
-  ? environment.FRONTEND_URL.split(',').map((url) => url.trim().replace(/\/+$/, ''))
-  : ['http://localhost:5173', 'http://localhost:3000'];
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  ENV.FRONTEND_URL,
+].filter(Boolean);
 
-const corsOptions = {
-  origin: (origin, callback) => {
-    // Allow non-browser requests (like curl, Postman, server-to-server) where origin is undefined
-    if (!origin) return callback(null, true);
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (such as mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
 
-    if (environment.IS_PRODUCTION) {
-      if (allowedOrigins.includes(origin)) {
+      if (allowedOrigins.some((allowed) => origin === allowed || allowed === '*')) {
         return callback(null, true);
       }
-      return callback(new Error(`CORS policy does not allow access from origin: ${origin}`));
-    }
 
-    // In development allow localhost origins as well as allowedOrigins
-    if (
-      allowedOrigins.includes(origin) ||
-      origin.startsWith('http://localhost:') ||
-      origin.startsWith('http://127.0.0.1:')
-    ) {
+      // In production, enforce strict origin
+      if (ENV.NODE_ENV === 'production') {
+        return callback(new Error(`Origin ${origin} not allowed by CORS`));
+      }
+
       return callback(null, true);
-    }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+  })
+);
 
-    return callback(new Error(`CORS policy does not allow access from origin: ${origin}`));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-};
-
-app.use(cors(corsOptions));
-
-// Body parsers
+// Request body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static file serving for uploads
-app.use('/uploads', express.static(path.resolve(__dirname, '../uploads')));
-
-// General API Rate Limiting
+// Global rate limiting for API
 app.use('/api', apiLimiter);
 
-// Mount API Routes
-app.use('/api/health', healthRoutes);
+// Health Check Endpoint
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'disconnected';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'connected';
+  } catch (err) {
+    dbStatus = 'error: ' + err.message;
+  }
+
+  const isHealthy = dbStatus === 'connected';
+  return res.status(isHealthy ? 200 : 503).json({
+    success: isHealthy,
+    message: isHealthy ? 'API is running' : 'Database service unavailable',
+    database: dbStatus,
+    timestamp: new Date().toISOString(),
+    env: ENV.NODE_ENV,
+  });
+});
+
+// Mount modular API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/hero', heroRoutes);
@@ -103,21 +111,20 @@ app.use('/api/navigation', navigationRoutes);
 app.use('/api/footer', footerRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/contact', contactRoutes);
-app.use('/api/upload', uploadRoutes);
 
-// Root informational endpoint
-app.get('/', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'Dhanush M Portfolio CMS Backend API is running.',
-    docs: 'Refer to /api/health for system status.',
+// Homepage sections and legacy /api/sections alias
+app.use('/api/homepage', homepageRoutes);
+app.use('/api/sections', homepageRoutes);
+
+// 404 Fallback Handler
+app.use((req, res) => {
+  return res.status(404).json({
+    success: false,
+    message: `API endpoint ${req.method} ${req.originalUrl} not found`,
   });
 });
 
-// 404 Handler
-app.use(notFoundHandler);
-
-// Centralized Error Handler
+// Centralized error middleware
 app.use(errorHandler);
 
-module.exports = app;
+export default app;

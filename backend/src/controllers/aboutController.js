@@ -1,72 +1,129 @@
-const { prisma } = require('../config/database');
-const { successResponse } = require('../utils/apiResponse');
+import prisma from '../config/database.js';
+import { successResponse } from '../utils/apiResponse.js';
 
 /**
- * Helper to get or create singleton About
+ * Get About Section
+ * GET /api/about
  */
-async function getOrCreateAbout() {
+export const getAbout = async (req, res) => {
   let about = await prisma.about.findFirst();
+
   if (!about) {
     about = await prisma.about.create({
       data: {
-        title: 'About Me',
-        description: 'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development.',
-        paragraphs: [
-          'Experienced with frontend development, backend APIs, databases, Git, and project-based development.',
-          'Strong interest in building responsive web applications and learning modern software development technologies.',
-        ],
-        highlights: [
-          { label: 'Degree', value: 'B.E CSE' },
-          { label: 'University', value: 'Anna Univ' },
-          { label: 'CGPA', value: '7.20' },
-        ],
+        heading: 'Professional Summary',
+        subheading: 'A dedicated developer focused on responsive web development, robust backend APIs, and clean software practices.',
+        shortIntro: "Hi, I'm Dhanush M — Web Developer.",
+        description: 'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development. Experienced in designing interactive, accessible interfaces using React and building secure, performant REST APIs with Node.js, Express, and MySQL.',
+        professionalSummary: 'Proficient in modern frontend component architecture, responsive styling with pure CSS, relational database modeling, and version control workflows with Git and GitHub.',
+        yearsExperience: '1+',
+        projectsCompleted: '5+',
+        degree: 'B.E CSE',
+        cgpa: '7.20',
+        skillsHighlight: 'React, Node.js, Express, MySQL, JavaScript, Git',
+        imageUrl: '/dhanush-profile.jpg',
+        ctaText: 'View Projects',
+        ctaLink: '#projects',
+        resumeUrl: '/resume.pdf',
+        email: 'dhanush2005mp@gmail.com',
+        phone: '+91 98765 43210',
+        location: 'Chennai, India',
         isActive: true,
       },
     });
   }
-  return about;
-}
+
+  // Ensure both camelCase and snake_case properties are available for seamless frontend binding
+  const responseData = {
+    ...about,
+    heading: about.heading,
+    subheading: about.subheading,
+    short_intro: about.shortIntro,
+    professional_summary: about.professionalSummary,
+    years_experience: about.yearsExperience,
+    projects_completed: about.projectsCompleted,
+    skills_highlight: about.skillsHighlight,
+    image_url: about.imageUrl,
+    image: about.imageUrl,
+    cta_text: about.ctaText,
+    cta_link: about.ctaLink,
+    resume_url: about.resumeUrl,
+    core_focus: about.coreFocus,
+  };
+
+  return successResponse(res, 200, 'About section retrieved', responseData);
+};
 
 /**
- * Get About section
- * GET /api/about
- */
-async function getAbout(req, res) {
-  const about = await getOrCreateAbout();
-  return successResponse(res, about, 'About section retrieved successfully');
-}
-
-/**
- * Update About section
+ * Update About Section
  * PUT /api/about
  */
-async function updateAbout(req, res) {
-  const existing = await getOrCreateAbout();
+export const updateAbout = async (req, res) => {
+  let about = await prisma.about.findFirst();
+  const body = req.body || {};
 
-  const allowedFields = [
-    'title',
-    'description',
-    'paragraphs',
-    'highlights',
-    'isActive',
-  ];
+  // Map snake_case to model camelCase if sent
+  const updateData = {
+    heading: body.heading !== undefined ? body.heading : body.title,
+    subheading: body.subheading,
+    shortIntro: body.shortIntro || body.short_intro,
+    description: body.description,
+    professionalSummary: body.professionalSummary || body.professional_summary,
+    yearsExperience: body.yearsExperience || body.years_experience,
+    projectsCompleted: body.projectsCompleted || body.projects_completed,
+    degree: body.degree,
+    cgpa: body.cgpa,
+    skillsHighlight: body.skillsHighlight || body.skills_highlight,
+    imageUrl: body.imageUrl || body.image_url || body.image,
+    imagePublicId: body.imagePublicId || body.image_public_id,
+    ctaText: body.ctaText || body.cta_text,
+    ctaLink: body.ctaLink || body.cta_link,
+    resumeUrl: body.resumeUrl || body.resume_url,
+    email: body.email,
+    phone: body.phone,
+    location: body.location,
+    coreFocus: body.coreFocus || body.core_focus,
+    paragraphs: body.paragraphs,
+    highlights: body.highlights,
+    isActive: body.isActive !== undefined ? body.isActive : true,
+  };
 
-  const updateData = {};
-  for (const field of allowedFields) {
-    if (req.body[field] !== undefined) {
-      updateData[field] = req.body[field];
-    }
-  }
-
-  const updatedAbout = await prisma.about.update({
-    where: { id: existing.id },
-    data: updateData,
+  // Remove undefined fields
+  Object.keys(updateData).forEach((key) => {
+    if (updateData[key] === undefined) delete updateData[key];
   });
 
-  return successResponse(res, updatedAbout, 'About section updated successfully');
-}
+  let updated;
+  if (about) {
+    updated = await prisma.about.update({
+      where: { id: about.id },
+      data: updateData,
+    });
+  } else {
+    updated = await prisma.about.create({
+      data: updateData,
+    });
+  }
 
-module.exports = {
+  const responseData = {
+    ...updated,
+    short_intro: updated.shortIntro,
+    professional_summary: updated.professionalSummary,
+    years_experience: updated.yearsExperience,
+    projects_completed: updated.projectsCompleted,
+    skills_highlight: updated.skillsHighlight,
+    image_url: updated.imageUrl,
+    image: updated.imageUrl,
+    cta_text: updated.ctaText,
+    cta_link: updated.ctaLink,
+    resume_url: updated.resumeUrl,
+    core_focus: updated.coreFocus,
+  };
+
+  return successResponse(res, 200, 'About section updated successfully', responseData);
+};
+
+export default {
   getAbout,
   updateAbout,
 };

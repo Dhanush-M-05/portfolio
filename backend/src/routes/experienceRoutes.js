@@ -1,16 +1,20 @@
-const express = require('express');
-const router = express.Router();
-const experienceController = require('../controllers/experienceController');
-const asyncHandler = require('../utils/asyncHandler');
-const { authenticate } = require('../middleware/authMiddleware');
+import { Router } from 'express';
+import {
+  getExperience,
+  getExperienceById,
+  createExperience,
+  updateExperience,
+  deleteExperience,
+} from '../controllers/experienceController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public
-router.get('/', asyncHandler(experienceController.getExperiences));
-router.get('/:id', asyncHandler(experienceController.getExperienceById));
+const router = Router();
 
-// Admin Protected
-router.post('/', authenticate, asyncHandler(experienceController.createExperience));
-router.put('/:id', authenticate, asyncHandler(experienceController.updateExperience));
-router.delete('/:id', authenticate, asyncHandler(experienceController.deleteExperience));
+router.get('/', asyncHandler(getExperience));
+router.get('/:id', asyncHandler(getExperienceById));
+router.post('/', requireAuth, asyncHandler(createExperience));
+router.put('/:id', requireAuth, asyncHandler(updateExperience));
+router.delete('/:id', requireAuth, asyncHandler(deleteExperience));
 
-module.exports = router;
+export default router;

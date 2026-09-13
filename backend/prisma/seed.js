@@ -1,541 +1,454 @@
-const path = require('path');
-const fs = require('fs');
-const bcrypt = require('bcryptjs');
-const { PrismaClient } = require('@prisma/client');
-const dotenv = require('dotenv');
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
 
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config();
 
 const prisma = new PrismaClient();
 
-/**
- * Creates a valid minimal PDF file if not already present
- */
-function createSampleResumePdf(targetPath) {
-  const resumeDir = path.dirname(targetPath);
-  if (!fs.existsSync(resumeDir)) {
-    fs.mkdirSync(resumeDir, { recursive: true });
-  }
-
-  if (!fs.existsSync(targetPath)) {
-    // Standard minimal valid PDF 1.4 specification
-    const pdfContent = `%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
-endobj
-4 0 obj
-<< /Length 174 >>
-stream
-BT
-/F1 22 Tf
-50 720 Td
-(Dhanush M - Full Stack Developer Resume) Tj
-0 -36 Td
-/F1 12 Tf
-(Email: dhanush2005mp@gmail.com | Phone: 9344976660 | Location: Chennai, India) Tj
-ET
-endstream
-endobj
-5 0 obj
-<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
-endobj
-xref
-0 6
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000115 00000 n 
-0000000226 00000 n 
-0000000453 00000 n 
-trailer
-<< /Size 6 /Root 1 0 R >>
-startxref
-525
-%%EOF`;
-    fs.writeFileSync(targetPath, pdfContent, 'utf-8');
-    console.log('[Seed] Created sample resume PDF at:', targetPath);
-  }
-}
-
 async function main() {
-  console.log('[Seed] Starting database seed...');
+  console.log('🌱 Starting database seed...');
 
-  const adminName = process.env.ADMIN_NAME || 'Dhanush M';
-  const adminEmail = (process.env.ADMIN_EMAIL || 'dhanush2005mp@gmail.com').toLowerCase();
-  const adminPassword = process.env.ADMIN_PASSWORD || 'AdminPassword@2026';
+  // 1. Seed Admin User from .env
+  const adminEmail = process.env.ADMIN_EMAIL || 'admin@dhanush.dev';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'adminpassword123';
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
-  // 1. Seed Admin User
-  const existingAdmin = await prisma.adminUser.findUnique({
-    where: { email: adminEmail },
-  });
-
-  if (!existingAdmin) {
-    const hashedPassword = await bcrypt.hash(adminPassword, 12);
-    await prisma.adminUser.create({
+  const existingAdmin = await prisma.adminUser.findFirst();
+  let admin;
+  if (existingAdmin) {
+    admin = await prisma.adminUser.update({
+      where: { id: existingAdmin.id },
       data: {
-        name: adminName,
         email: adminEmail,
-        password: hashedPassword,
+        passwordHash: hashedPassword,
+      },
+    });
+  } else {
+    admin = await prisma.adminUser.create({
+      data: {
+        email: adminEmail,
+        username: 'admin',
+        passwordHash: hashedPassword,
         role: 'admin',
       },
     });
-    console.log(`[Seed] Created admin user: ${adminEmail}`);
-  } else {
-    console.log(`[Seed] Admin user ${adminEmail} already exists. Skipping.`);
   }
+  console.log(`✅ Admin user synchronized from .env: ${admin.email}`);
 
   // 2. Seed Profile
   const existingProfile = await prisma.profile.findFirst();
-  if (!existingProfile) {
-    await prisma.profile.create({
-      data: {
-        name: 'Dhanush M',
-        title: 'Web Developer / Full Stack Developer',
-        college: 'JNN Institute of Engineering',
-        department: 'Computer Science and Engineering',
-        course: 'B.E. Computer Science and Engineering',
-        location: 'Chennai, Tamil Nadu',
-        email: 'dhanush2005mp@gmail.com',
-        phone: '9344976660',
-        profileImageUrl: '/dhanush-profile.jpg',
-        profileImageFileName: 'dhanush-profile.jpg',
-        bio: 'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development. Experienced with frontend development, backend APIs, databases, Git, and project-based development. Strong interest in building responsive web applications and learning modern software development technologies.',
-        shortBio: 'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development.',
-      },
-    });
-    console.log('[Seed] Created Profile record');
-  }
+  const profileData = {
+    name: 'Dhanush M',
+    role: 'Web Developer',
+    title: 'Full Stack Developer',
+    college: 'J.N.N Institute of Engineering',
+    department: 'Computer Science and Engineering',
+    degree: 'B.E.',
+    course: 'B.E. Computer Science and Engineering',
+    domain: 'Full Stack Web Development',
+    location: 'Chennai, Tamil Nadu, India',
+    email: 'dhanush2005mp@gmail.com',
+    phone: '+91 98765 43210',
+    tagline: 'Crafting performant web experiences, scalable backend architectures, and clean software solutions.',
+    bio: 'Motivated and detail-oriented Computer Science undergraduate with hands-on experience in modern web development technologies including React, Node.js, Express, MySQL, and REST APIs.',
+    shortBio: 'Full stack developer focused on responsive web applications and scalable APIs.',
+    heroDescription: 'Building modern responsive web applications, robust backend microservices, and high-performance user interfaces with clean architecture.',
+    aboutHeading: 'Professional Summary',
+    aboutSubheading: 'A dedicated developer focused on responsive web development, robust backend APIs, and clean software practices.',
+    avatarUrl: '/dhanush-profile.jpg',
+    stats: [
+      { label: 'Years Experience', value: '1+' },
+      { label: 'Completed Projects', value: '5+' },
+      { label: 'Code Commits', value: '250+' },
+      { label: 'CGPA', value: '7.20' }
+    ]
+  };
 
-  // 3. Seed Hero
+  if (existingProfile) {
+    await prisma.profile.update({
+      where: { id: existingProfile.id },
+      data: profileData,
+    });
+  } else {
+    await prisma.profile.create({ data: profileData });
+  }
+  console.log('✅ Profile seeded');
+
+  // 3. Seed Hero Section
   const existingHero = await prisma.hero.findFirst();
-  if (!existingHero) {
-    await prisma.hero.create({
-      data: {
-        title: "HELLO, I'M",
-        subtitle: 'Dhanush M',
-        description: 'Experienced with frontend development, backend APIs, databases, Git, and project-based development. Strong interest in building responsive web applications and learning modern software development technologies.',
-        primaryButtonText: 'View My Work',
-        primaryButtonUrl: '#projects',
-        secondaryButtonText: "Let's Talk",
-        secondaryButtonUrl: '#contact',
-        isActive: true,
-      },
-    });
-    console.log('[Seed] Created Hero record');
-  }
+  const heroData = {
+    greeting: "HELLO, I'M",
+    roleTitle: 'Web Developer',
+    tagline: 'Engineering robust frontend experiences and scalable backend services.',
+    description: 'Specializing in React, Node.js, Express, MySQL, and modern web application development with clean code practices.',
+    primaryBtnText: 'View My Work',
+    primaryBtnLink: '#projects',
+    secondaryBtnText: "Let's Talk",
+    secondaryBtnLink: '#contact',
+    talkLinkText: "Let's Talk",
+    resumeBtnText: 'Download Resume',
+    isActive: true,
+  };
 
-  // 4. Seed About
-  const existingAbout = await prisma.about.findFirst();
-  if (!existingAbout) {
-    await prisma.about.create({
-      data: {
-        title: 'Professional Summary',
-        description: 'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development. Experienced with frontend development, backend APIs, databases, Git, and project-based development. Strong interest in building responsive web applications and learning modern software development technologies.',
-        paragraphs: [
-          'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development.',
-          'Experienced with frontend development, backend APIs, databases, Git, and project-based development.',
-          'Strong interest in building responsive web applications and learning modern software development technologies.',
-        ],
-        highlights: [
-          { label: 'Degree', value: 'B.E CSE' },
-          { label: 'University', value: 'Anna Univ' },
-          { label: 'Expected Year', value: '2027' },
-          { label: 'CGPA', value: '7.20' },
-        ],
-        isActive: true,
-      },
+  if (existingHero) {
+    await prisma.hero.update({
+      where: { id: existingHero.id },
+      data: heroData,
     });
-    console.log('[Seed] Created About record');
+  } else {
+    await prisma.hero.create({ data: heroData });
   }
+  console.log('✅ Hero section seeded');
+
+  // 4. Seed About Section
+  const existingAbout = await prisma.about.findFirst();
+  const aboutData = {
+    heading: 'Professional Summary',
+    subheading: 'A dedicated developer focused on responsive web development, robust backend APIs, and clean software practices.',
+    shortIntro: "Hi, I'm Dhanush M — Web Developer.",
+    description: 'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development. Experienced in designing interactive, accessible interfaces using React and building secure, performant REST APIs with Node.js, Express, and MySQL.',
+    professionalSummary: 'Proficient in modern frontend component architecture, responsive styling with pure CSS, relational database modeling, and version control workflows with Git and GitHub.',
+    yearsExperience: '1+',
+    projectsCompleted: '5+',
+    degree: 'B.E CSE',
+    cgpa: '7.20',
+    skillsHighlight: 'React, Node.js, Express, MySQL, JavaScript, Git',
+    imageUrl: '/dhanush-profile.jpg',
+    ctaText: 'View Projects',
+    ctaLink: '#projects',
+    resumeUrl: '/resume.pdf',
+    email: 'dhanush2005mp@gmail.com',
+    phone: '+91 98765 43210',
+    location: 'Chennai, India',
+    coreFocus: [
+      {
+        title: 'Frontend Engineering',
+        description: 'Building responsive, modular user interfaces with HTML, CSS, JavaScript, and React.js.'
+      },
+      {
+        title: 'Backend & REST APIs',
+        description: 'Designing structured backend services, view logic, and API endpoints using Express and Node.js.'
+      },
+      {
+        title: 'Database Management',
+        description: 'Engineering relational database schemas, tables, and optimized queries with MySQL and Prisma.'
+      },
+      {
+        title: 'Developer Workflows',
+        description: 'Collaborating with Git version control, GitHub repositories, and structured debugging in VS Code.'
+      }
+    ],
+    isActive: true,
+  };
+
+  if (existingAbout) {
+    await prisma.about.update({
+      where: { id: existingAbout.id },
+      data: aboutData,
+    });
+  } else {
+    await prisma.about.create({ data: aboutData });
+  }
+  console.log('✅ About section seeded');
 
   // 5. Seed Services
-  const servicesCount = await prisma.service.count();
-  if (servicesCount === 0) {
-    await prisma.service.createMany({
-      data: [
-        {
-          title: 'Full Stack Web Development',
-          description: 'Building end-to-end web applications with modern frontend frameworks and robust backend services.',
-          icon: 'CodeIcon',
-          order: 1,
-          isActive: true,
-        },
-        {
-          title: 'Frontend Development & UI Design',
-          description: 'Designing responsive, accessible, and dynamic user interfaces using React, CSS, and interactive state management.',
-          icon: 'LayoutIcon',
-          order: 2,
-          isActive: true,
-        },
-        {
-          title: 'Backend & RESTful API Architecture',
-          description: 'Developing secure, scalable RESTful API services with Node.js, Spring Boot, Django, and clean MVC/MVT patterns.',
-          icon: 'ServerIcon',
-          order: 3,
-          isActive: true,
-        },
-        {
-          title: 'Relational Database Engineering',
-          description: 'Architecting normalized database schemas, queries, migrations, and transactions with MySQL.',
-          icon: 'DatabaseIcon',
-          order: 4,
-          isActive: true,
-        },
-      ],
-    });
-    console.log('[Seed] Created Services records');
-  }
+  const services = [
+    {
+      title: 'Frontend Web Development',
+      description: 'Engineering responsive, accessible, and performant web interfaces with modern React, pure CSS, and intuitive user experiences.',
+      icon: 'CodeIcon',
+      order: 1,
+      isActive: true,
+    },
+    {
+      title: 'Backend & API Engineering',
+      description: 'Architecting robust RESTful API endpoints, secure authentication, rate limiting, and business logic with Node.js and Express.',
+      icon: 'LayersIcon',
+      order: 2,
+      isActive: true,
+    },
+    {
+      title: 'Database Architecture',
+      description: 'Designing relational MySQL schemas, indexes, queries, and ORM migrations with Prisma for reliable data persistence.',
+      icon: 'ShieldCheckIcon',
+      order: 3,
+      isActive: true,
+    },
+    {
+      title: 'Full Stack Integration',
+      description: 'Connecting frontend clients to cloud media storage (Cloudinary), transactional email providers (Resend), and production deployments.',
+      icon: 'SparklesIcon',
+      order: 4,
+      isActive: true,
+    },
+  ];
 
-  // 6. Seed Skills
-  const skillsCount = await prisma.skill.count();
-  if (skillsCount === 0) {
-    await prisma.skill.createMany({
-      data: [
-        { name: 'Java', category: 'languages', proficiency: 'Advanced', icon: 'JavaIcon', order: 1, isActive: true },
-        { name: 'Python', category: 'languages', proficiency: 'Intermediate', icon: 'PythonIcon', order: 2, isActive: true },
-        { name: 'JavaScript', category: 'languages', proficiency: 'Advanced', icon: 'JsIcon', order: 3, isActive: true },
-        { name: 'SQL', category: 'languages', proficiency: 'Intermediate', icon: 'SqlIcon', order: 4, isActive: true },
-        { name: 'HTML5', category: 'frontend', proficiency: 'Advanced', icon: 'HtmlIcon', order: 5, isActive: true },
-        { name: 'CSS3', category: 'frontend', proficiency: 'Advanced', icon: 'CssIcon', order: 6, isActive: true },
-        { name: 'React.js', category: 'frontend', proficiency: 'Advanced', icon: 'ReactIcon', order: 7, isActive: true },
-        { name: 'Node.js', category: 'backend', proficiency: 'Intermediate', icon: 'NodeIcon', order: 8, isActive: true },
-        { name: 'Express.js', category: 'backend', proficiency: 'Intermediate', icon: 'ExpressIcon', order: 9, isActive: true },
-        { name: 'Spring Boot', category: 'backend', proficiency: 'Intermediate', icon: 'SpringIcon', order: 10, isActive: true },
-        { name: 'Django', category: 'backend', proficiency: 'Intermediate', icon: 'DjangoIcon', order: 11, isActive: true },
-        { name: 'REST APIs', category: 'backend', proficiency: 'Advanced', icon: 'ApiIcon', order: 12, isActive: true },
-        { name: 'MySQL', category: 'database', proficiency: 'Advanced', icon: 'MysqlIcon', order: 13, isActive: true },
-        { name: 'Git & GitHub', category: 'tools', proficiency: 'Advanced', icon: 'GitIcon', order: 14, isActive: true },
-        { name: 'VS Code', category: 'tools', proficiency: 'Advanced', icon: 'VscodeIcon', order: 15, isActive: true },
-      ],
-    });
-    console.log('[Seed] Created Skills records');
-  }
-
-  // 7. Seed Projects & Project Images
-  const projectsCount = await prisma.project.count();
-  if (projectsCount === 0) {
-    const p1 = await prisma.project.create({
-      data: {
-        title: 'Yeast Production System',
-        slug: 'yeast-production-system',
-        shortDescription: 'A web-based production management system with workflow, reporting, analysis, and data-management modules.',
-        description: 'Built a web-based production management system designed to streamline fermentation monitoring, batch tracking, and production analytics. Implemented workflow, reporting, analysis, and data-management modules with backend APIs and structured database integration using Django and MySQL.',
-        technologies: ['HTML', 'CSS', 'JavaScript', 'Django', 'MySQL'],
-        githubUrl: 'https://github.com/Dhanush-M-05/yeast-production-system',
-        liveUrl: null,
-        thumbnailUrl: '/yeast-production.jpg',
-        featured: true,
-        order: 1,
-        isActive: true,
-        images: {
-          create: [
-            { imageUrl: '/yeast-production.jpg', altText: 'Yeast Production Dashboard', order: 1 },
-          ],
-        },
-      },
-    });
-
-    const p2 = await prisma.project.create({
-      data: {
-        title: 'Reverse Marketplace',
-        slug: 'reverse-marketplace',
-        shortDescription: 'A platform where buyers post requirements and sellers submit itemized quotations.',
-        description: 'Engineered a reverse marketplace platform enabling demand-driven procurement. Buyers create structured requirement posts and verified sellers submit itemized price quotations with transparent order management using React, Spring Boot, and Java.',
-        technologies: ['React.js', 'HTML', 'CSS', 'Spring Boot', 'MySQL'],
-        githubUrl: 'https://github.com/Dhanush-M-05/reverse-marketplace',
-        liveUrl: null,
-        thumbnailUrl: '/reverse-marketplace.jpg',
-        featured: true,
-        order: 2,
-        isActive: true,
-        images: {
-          create: [
-            { imageUrl: '/reverse-marketplace.jpg', altText: 'Reverse Marketplace Platform', order: 1 },
-          ],
-        },
-      },
-    });
-
-    const p3 = await prisma.project.create({
-      data: {
-        title: 'Campus Event Management System (NexEvent)',
-        slug: 'campus-event-management',
-        shortDescription: 'A full-stack campus event platform designed for students, organizers, and administrators.',
-        description: 'Developed a full-stack campus event platform designed for students, organizers, and administrators to discover events, register attendees, and review submissions through automated administrative workflows.',
-        technologies: ['React.js', 'HTML', 'CSS', 'Spring Boot', 'MySQL'],
-        githubUrl: 'https://github.com/Dhanush-M-05/campus-event-management',
-        liveUrl: null,
-        thumbnailUrl: '/campus-event.jpg',
-        featured: true,
-        order: 3,
-        isActive: true,
-        images: {
-          create: [
-            { imageUrl: '/campus-event.jpg', altText: 'Campus Event Management UI', order: 1 },
-          ],
-        },
-      },
-    });
-
-    console.log('[Seed] Created Projects records with Project Images');
-  }
-
-  // 8. Seed Experience
-  const expCount = await prisma.experience.count();
-  if (expCount === 0) {
-    await prisma.experience.createMany({
-      data: [
-        {
-          company: 'AURA Institute & Technology',
-          position: 'Full Stack Developer Intern — Java',
-          location: 'Chennai, India',
-          startDate: 'May 2026',
-          endDate: 'June 2026',
-          isCurrent: false,
-          description: 'Developed a full-stack Reverse Marketplace web application using React.js, Spring Boot, and Java. Implemented buyer, seller, and admin workflows with role-based access control and RESTful APIs.',
-          technologies: ['React.js', 'Spring Boot', 'Java', 'REST APIs', 'MySQL'],
-          order: 1,
-          isActive: true,
-        },
-        {
-          company: 'VCODEZ',
-          position: 'Full Stack Development Intern — Python',
-          location: 'Chennai, India',
-          startDate: 'December 2024',
-          endDate: 'February 2025',
-          isCurrent: false,
-          description: 'Developed, tested, and deployed web application features using modern frontend technologies, Python, and relational database systems. Maintained database data accuracy and currency.',
-          technologies: ['HTML', 'CSS', 'JavaScript', 'React.js', 'Python', 'MySQL'],
-          order: 2,
-          isActive: true,
-        },
-      ],
-    });
-    console.log('[Seed] Created Experience records');
-  }
-
-  // 9. Seed Education
-  const eduCount = await prisma.education.count();
-  if (eduCount === 0) {
-    await prisma.education.create({
-      data: {
-        institution: 'JNN Institute of Engineering',
-        degree: 'B.E - Computer Science and Engineering',
-        department: 'Computer Science and Engineering',
-        startYear: '2023',
-        endYear: '2027',
-        grade: 'CGPA: 7.20',
-        description: 'Coursework in Data Structures, Algorithms, Object-Oriented Programming, Database Management Systems, Web Development, and Software Engineering principles. Affiliated with Anna University (Autonomous).',
-        order: 1,
-        isActive: true,
-      },
-    });
-    console.log('[Seed] Created Education record');
-  }
-
-  // 10. Seed Certifications
-  const certCount = await prisma.certification.count();
-  if (certCount === 0) {
-    await prisma.certification.createMany({
-      data: [
-        {
-          title: 'Introduction to Generative AI',
-          issuer: 'IBM SkillsBuild',
-          issueDate: '2025',
-          credentialId: 'IBM-GENAI-2025',
-          credentialUrl: null,
-          fileUrl: null,
-          order: 1,
-          isActive: true,
-        },
-        {
-          title: 'Industrial Internet of Things',
-          issuer: 'NPTEL',
-          issueDate: '2025',
-          credentialId: 'NPTEL-IIOT-2025',
-          credentialUrl: null,
-          fileUrl: null,
-          order: 2,
-          isActive: true,
-        },
-        {
-          title: 'Java in depth Become a complete Java Engineer',
-          issuer: 'Infosys Springboard',
-          issueDate: '2026',
-          credentialId: 'INFOSYS-JAVA-2026',
-          credentialUrl: null,
-          fileUrl: null,
-          order: 3,
-          isActive: true,
-        },
-        {
-          title: 'GitHub Copilot',
-          issuer: 'Infosys Springboard',
-          issueDate: '2026',
-          credentialId: 'INFOSYS-COPILOT-2026',
-          credentialUrl: null,
-          fileUrl: null,
-          order: 4,
-          isActive: true,
-        },
-      ],
-    });
-    console.log('[Seed] Created Certifications records');
-  }
-
-  // 11. Seed Achievements
-  const achCount = await prisma.achievement.count();
-  if (achCount === 0) {
-    await prisma.achievement.createMany({
-      data: [
-        {
-          title: '1st Place — Campus Web Dev Hackathon',
-          description: 'Built the Campus Event Management System in under 24 hours featuring role-based workflows and real-time event coordination.',
-          date: '2024',
-          link: null,
-          order: 1,
-          isActive: true,
-        },
-        {
-          title: 'Finalist — Regional Open Innovation Challenge',
-          description: 'Presented the Reverse Marketplace procurement solution focusing on transparent buyer-seller quotation management.',
-          date: '2023',
-          link: null,
-          order: 2,
-          isActive: true,
-        },
-      ],
-    });
-    console.log('[Seed] Created Achievements records');
-  }
-
-  // 12. Seed Resume (and sample PDF)
-  const resumeFilePath = path.resolve(__dirname, '../uploads/resumes/Dhanush-M-Resume.pdf');
-  createSampleResumePdf(resumeFilePath);
-
-  const anyResume = await prisma.resume.findFirst({
-    orderBy: { uploadedAt: 'desc' },
-  });
-
-  if (!anyResume) {
-    const stats = fs.statSync(resumeFilePath);
-    await prisma.resume.create({
-      data: {
-        fileName: 'Dhanush-M-Resume.pdf',
-        fileUrl: '/uploads/resumes/Dhanush-M-Resume.pdf',
-        fileType: 'application/pdf',
-        fileSize: stats.size,
-        isActive: true,
-      },
-    });
-    console.log('[Seed] Created active Resume record');
-  } else {
-    const hasActive = await prisma.resume.findFirst({ where: { isActive: true } });
-    if (!hasActive) {
-      await prisma.resume.update({
-        where: { id: anyResume.id },
-        data: { isActive: true },
-      });
-      console.log('[Seed] Re-activated latest resume record');
+  for (const s of services) {
+    const existing = await prisma.service.findFirst({ where: { title: s.title } });
+    if (!existing) {
+      await prisma.service.create({ data: s });
     }
   }
+  console.log('✅ Services seeded');
 
-  // 13. Seed Social Links
-  const socialCount = await prisma.socialLink.count();
-  if (socialCount === 0) {
-    await prisma.socialLink.createMany({
-      data: [
-        {
-          platform: 'LinkedIn',
-          label: 'LinkedIn',
-          url: 'https://www.linkedin.com/in/dhanush151005/',
-          icon: 'LinkedinIcon',
-          order: 1,
-          isActive: true,
-        },
-        {
-          platform: 'GitHub',
-          label: 'GitHub',
-          url: 'https://github.com/Dhanush-M-05',
-          icon: 'GithubIcon',
-          order: 2,
-          isActive: true,
-        },
-        {
-          platform: 'Email',
-          label: 'Email',
-          url: 'mailto:dhanush2005mp@gmail.com',
-          icon: 'MailIcon',
-          order: 3,
-          isActive: true,
-        },
-      ],
-    });
-    console.log('[Seed] Created Social Links records');
+  // 6. Seed Skills
+  const skills = [
+    // Frontend
+    { name: 'JavaScript (ES6+)', category: 'Frontend', proficiency: 90, icon: 'javascript', order: 1 },
+    { name: 'React.js', category: 'Frontend', proficiency: 88, icon: 'react', order: 2 },
+    { name: 'HTML5 & Semantic Markup', category: 'Frontend', proficiency: 95, icon: 'html5', order: 3 },
+    { name: 'CSS3 & Modern Layouts', category: 'Frontend', proficiency: 90, icon: 'css3', order: 4 },
+    { name: 'Responsive Design', category: 'Frontend', proficiency: 92, icon: 'responsive', order: 5 },
+
+    // Backend
+    { name: 'Node.js', category: 'Backend', proficiency: 85, icon: 'nodejs', order: 6 },
+    { name: 'Express.js', category: 'Backend', proficiency: 86, icon: 'express', order: 7 },
+    { name: 'RESTful API Architecture', category: 'Backend', proficiency: 88, icon: 'api', order: 8 },
+    { name: 'JWT Authentication', category: 'Backend', proficiency: 85, icon: 'jwt', order: 9 },
+
+    // Database
+    { name: 'MySQL', category: 'Database', proficiency: 84, icon: 'mysql', order: 10 },
+    { name: 'Prisma ORM', category: 'Database', proficiency: 82, icon: 'prisma', order: 11 },
+    { name: 'Database Schema Design', category: 'Database', proficiency: 85, icon: 'database', order: 12 },
+
+    // Tools & Cloud
+    { name: 'Git & GitHub', category: 'Tools', proficiency: 90, icon: 'git', order: 13 },
+    { name: 'Cloudinary CDN', category: 'Tools', proficiency: 80, icon: 'cloudinary', order: 14 },
+    { name: 'VS Code & Debugging', category: 'Tools', proficiency: 90, icon: 'vscode', order: 15 },
+  ];
+
+  for (const sk of skills) {
+    const existing = await prisma.skill.findFirst({ where: { name: sk.name } });
+    if (!existing) {
+      await prisma.skill.create({ data: sk });
+    }
   }
+  console.log('✅ Skills seeded');
 
-  // 14. Seed Navigation
-  const navCount = await prisma.navigationItem.count();
-  if (navCount === 0) {
-    await prisma.navigationItem.createMany({
-      data: [
-        { label: 'Home', url: '#home', order: 1, isActive: true, openInNewTab: false },
-        { label: 'About', url: '#about', order: 2, isActive: true, openInNewTab: false },
-        { label: 'Services', url: '#services', order: 3, isActive: true, openInNewTab: false },
-        { label: 'Skills', url: '#skills', order: 4, isActive: true, openInNewTab: false },
-        { label: 'Projects', url: '#projects', order: 5, isActive: true, openInNewTab: false },
-        { label: 'Experience', url: '#experience', order: 6, isActive: true, openInNewTab: false },
-        { label: 'Education', url: '#education', order: 7, isActive: true, openInNewTab: false },
-        { label: 'Certifications', url: '#certifications', order: 8, isActive: true, openInNewTab: false },
-        { label: 'Contact', url: '#contact', order: 9, isActive: true, openInNewTab: false },
-      ],
+  // 7. Seed Projects (Empty by default - to be managed dynamically via Admin CMS)
+  const projects = [];
+
+  for (const p of projects) {
+    await prisma.project.upsert({
+      where: { slug: p.slug },
+      update: p,
+      create: p,
     });
-    console.log('[Seed] Created Navigation Items records');
   }
+  console.log('✅ Projects seed step complete (0 placeholder projects)');
 
-  // 15. Seed Footer
+  // 8. Seed Experience (Empty by default - to be managed dynamically via Admin CMS)
+  const experiences = [];
+
+  for (const exp of experiences) {
+    const existing = await prisma.experience.findFirst({ where: { company: exp.company } });
+    if (!existing) {
+      await prisma.experience.create({ data: exp });
+    }
+  }
+  console.log('✅ Experience seed step complete (0 placeholder items)');
+
+  // 9. Seed Education
+  const educations = [
+    {
+      institution: 'J.N.N Institute of Engineering',
+      degree: 'Bachelor of Engineering (B.E.)',
+      department: 'Computer Science and Engineering',
+      startYear: '2022',
+      endYear: '2026',
+      grade: 'CGPA: 7.20 / 10',
+      description: 'Core coursework includes Data Structures & Algorithms, Object-Oriented Programming, Database Management Systems, Computer Networks, and Web Technology.',
+      order: 1,
+      isActive: true,
+    }
+  ];
+
+  for (const edu of educations) {
+    const existing = await prisma.education.findFirst({ where: { institution: edu.institution } });
+    if (!existing) {
+      await prisma.education.create({ data: edu });
+    }
+  }
+  console.log('✅ Education seeded');
+
+  // 10. Seed Certifications (Empty by default - to be managed dynamically via Admin CMS)
+  const certifications = [];
+
+  for (const c of certifications) {
+    const existing = await prisma.certification.findFirst({ where: { title: c.title } });
+    if (!existing) {
+      await prisma.certification.create({ data: c });
+    }
+  }
+  console.log('✅ Certifications seed step complete (0 placeholder items)');
+
+  // 11. Seed Achievements (Empty by default - to be managed dynamically via Admin CMS)
+  const achievements = [];
+
+  for (const ach of achievements) {
+    const existing = await prisma.achievement.findFirst({ where: { title: ach.title } });
+    if (!existing) {
+      await prisma.achievement.create({ data: ach });
+    }
+  }
+  console.log('✅ Achievements seed step complete (0 placeholder items)');
+
+  // 12. Seed Social Links
+  const socialLinks = [
+    {
+      platform: 'LinkedIn',
+      label: 'LinkedIn',
+      url: 'https://www.linkedin.com/in/dhanush151005/',
+      icon: 'LinkedinIcon',
+      order: 1,
+      isActive: true,
+    },
+    {
+      platform: 'GitHub',
+      label: 'GitHub',
+      url: 'https://github.com/Dhanush-M-05',
+      icon: 'GithubIcon',
+      order: 2,
+      isActive: true,
+    },
+    {
+      platform: 'Email',
+      label: 'Email',
+      url: 'mailto:dhanush2005mp@gmail.com',
+      icon: 'MailIcon',
+      order: 3,
+      isActive: true,
+    }
+  ];
+
+  for (const sl of socialLinks) {
+    const existing = await prisma.socialLink.findFirst({ where: { platform: sl.platform } });
+    if (!existing) {
+      await prisma.socialLink.create({ data: sl });
+    }
+  }
+  console.log('✅ Social links seeded');
+
+  // 13. Seed Navigation Items
+  const navItems = [
+    { label: 'Home', url: '#home', target: 'home', order: 1, isActive: true, isVisible: true },
+    { label: 'About', url: '#about', target: 'about', order: 2, isActive: true, isVisible: true },
+    { label: 'Services', url: '#services', target: 'services', order: 3, isActive: true, isVisible: true },
+    { label: 'Skills', url: '#skills', target: 'skills', order: 4, isActive: true, isVisible: true },
+    { label: 'Projects', url: '#projects', target: 'projects', order: 5, isActive: true, isVisible: true },
+    { label: 'Experience', url: '#experience', target: 'experience', order: 6, isActive: true, isVisible: true },
+    { label: 'Education', url: '#education', target: 'education', order: 7, isActive: true, isVisible: true },
+    { label: 'Certifications', url: '#certifications', target: 'certifications', order: 8, isActive: true, isVisible: true },
+    { label: 'Contact', url: '#contact', target: 'contact', order: 9, isActive: true, isVisible: true },
+  ];
+
+  for (const ni of navItems) {
+    const existing = await prisma.navigationItem.findFirst({ where: { label: ni.label } });
+    if (!existing) {
+      await prisma.navigationItem.create({ data: ni });
+    }
+  }
+  console.log('✅ Navigation items seeded');
+
+  // 14. Seed Footer
   const existingFooter = await prisma.footer.findFirst();
-  if (!existingFooter) {
-    await prisma.footer.create({
-      data: {
-        description: 'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development.',
-        copyrightText: `© ${new Date().getFullYear()} Dhanush M. Designed & Built with React and Pure CSS.`,
-        email: 'dhanush2005mp@gmail.com',
-        phone: '9344976660',
-        location: 'Chennai, Tamil Nadu',
-      },
-    });
-    console.log('[Seed] Created Footer record');
-  }
+  const footerData = {
+    brandName: 'Dhanush M',
+    brandRole: 'Web Developer',
+    tagline: 'Motivated Computer Science graduate seeking opportunities in Web Development / Full Stack Development.',
+    quickLinksHeading: 'Navigation',
+    deepLinksHeading: 'Portfolio',
+    contactHeading: 'Direct Inquiries',
+    contactDesc: 'Available for web development projects, freelance collaborations, and full-time opportunities.',
+    copyrightText: 'Designed & Built with React and Pure CSS.',
+    email: 'dhanush2005mp@gmail.com',
+    phone: '+91 98765 43210',
+    location: 'Chennai, India',
+  };
 
-  // 16. Seed Website Settings
+  if (existingFooter) {
+    await prisma.footer.update({
+      where: { id: existingFooter.id },
+      data: footerData,
+    });
+  } else {
+    await prisma.footer.create({ data: footerData });
+  }
+  console.log('✅ Footer seeded');
+
+  // 15. Seed Website Settings
   const existingSettings = await prisma.websiteSettings.findFirst();
-  if (!existingSettings) {
-    await prisma.websiteSettings.create({
-      data: {
-        siteTitle: 'Dhanush M | Portfolio',
-        siteDescription: 'Personal portfolio of Dhanush M, Full Stack Web Developer.',
-        faviconUrl: '/favicon.ico',
-        metaKeywords: 'Dhanush M, Web Developer, Full Stack Developer, React, Node.js, Spring Boot, MySQL',
-        googleAnalyticsId: null,
-        maintenanceMode: false,
-      },
+  const settingsData = {
+    siteTitle: 'Dhanush M | Web Developer Portfolio',
+    siteDescription: 'Full Stack Web Developer portfolio of Dhanush M showcasing projects, technical skills, certifications, and experience.',
+    favicon: '/favicon.ico',
+    metaKeywords: 'Dhanush M, Web Developer, Full Stack, React, Node.js, Express, MySQL, Portfolio',
+    brandName: 'Dhanush M',
+    brandRole: 'Web Developer',
+    logoLetters: 'DM',
+    resumeBtnText: 'Resume',
+    talkBtnText: "Let's Talk",
+    maintenanceMode: false,
+  };
+
+  if (existingSettings) {
+    await prisma.websiteSettings.update({
+      where: { id: existingSettings.id },
+      data: settingsData,
     });
-    console.log('[Seed] Created Website Settings record');
+  } else {
+    await prisma.websiteSettings.create({ data: settingsData });
+  }
+  console.log('✅ Website settings seeded');
+
+  // 16. Seed Homepage Sections
+  const sections = [
+    { sectionKey: 'hero', name: 'Hero', label: "HELLO, I'M", title: 'Hero Section', order: 1, isVisible: true },
+    { sectionKey: 'about', name: 'About', label: 'About Me', title: 'Professional Summary', subtitle: 'A dedicated developer focused on responsive web development, robust backend APIs, and clean software practices.', order: 2, isVisible: true },
+    { sectionKey: 'services', name: 'Services', label: 'Services', title: 'What I Do', subtitle: 'Specialized web development capabilities focused on scalable code, performant user interfaces, and seamless API integrations.', order: 3, isVisible: true },
+    { sectionKey: 'skills', name: 'Skills', label: 'Skills & Stack', title: 'Technical Skills', subtitle: 'Core competencies across programming languages, modern frontend libraries, backend architectures, databases, and version control tooling.', order: 4, isVisible: true },
+    { sectionKey: 'projects', name: 'Projects', label: 'Featured Work', title: 'Projects', subtitle: 'Real-world web platforms, database applications, and full-stack solutions built with modern technology stacks.', order: 5, isVisible: true },
+    { sectionKey: 'experience', name: 'Experience', label: 'Career Journey', title: 'Work Experience', subtitle: 'Professional internships and development roles focused on production web systems.', order: 6, isVisible: true },
+    { sectionKey: 'education', name: 'Education', label: 'Academic Background', title: 'Education', subtitle: 'Formal university degree and foundational coursework in computer science and engineering.', order: 7, isVisible: true },
+    { sectionKey: 'certifications', name: 'Certifications', label: 'Credentials', title: 'Certificates & Training', subtitle: 'Industry-recognized engineering certifications and technical continuous learning accomplishments.', order: 8, isVisible: true },
+    { sectionKey: 'achievements', name: 'Achievements', label: 'Recognition', title: 'Honors & Achievements', subtitle: 'Hackathons, technical competitions, and academic milestones.', order: 9, isVisible: true },
+    { sectionKey: 'resume', name: 'Resume', label: 'Curriculum Vitae', title: 'Professional Resume', subtitle: 'Preview or download the latest ATS-compliant developer resume.', order: 10, isVisible: true },
+    { sectionKey: 'contact', name: 'Contact', label: 'Get In Touch', title: "Let's Connect", subtitle: 'Have a project in mind, an internship opportunity, or want to discuss modern web development? Drop a message below.', order: 11, isVisible: true },
+  ];
+
+  for (const sec of sections) {
+    await prisma.homepageSection.upsert({
+      where: { sectionKey: sec.sectionKey },
+      update: sec,
+      create: sec,
+    });
+  }
+  console.log('✅ Homepage sections seeded');
+
+  // 17. Seed Initial Default Resume if none exists
+  const existingResume = await prisma.resume.findFirst({ where: { isActive: true } });
+  if (!existingResume) {
+    await prisma.resume.create({
+      data: {
+        title: 'ATS-Compliant Software Developer Resume',
+        fileName: 'Dhanush-M-Resume.pdf',
+        fileUrl: '/resume.pdf',
+        publicId: 'local-default-resume',
+        mimeType: 'application/pdf',
+        fileSize: 102400,
+        isActive: true,
+      }
+    });
+    console.log('✅ Default Resume record seeded');
   }
 
-  console.log('[Seed] Database seed completed successfully!');
+  console.log('🎉 Seed completed successfully!');
 }
 
 main()
   .catch((e) => {
-    console.error('[Seed] Seed script failed:', e);
+    console.error('❌ Error during seed:', e);
     process.exit(1);
   })
   .finally(async () => {

@@ -1,16 +1,20 @@
-const express = require('express');
-const router = express.Router();
-const skillController = require('../controllers/skillController');
-const asyncHandler = require('../utils/asyncHandler');
-const { authenticate } = require('../middleware/authMiddleware');
+import { Router } from 'express';
+import {
+  getSkills,
+  getSkillById,
+  createSkill,
+  updateSkill,
+  deleteSkill,
+} from '../controllers/skillController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public
-router.get('/', asyncHandler(skillController.getSkills));
-router.get('/:id', asyncHandler(skillController.getSkillById));
+const router = Router();
 
-// Admin Protected
-router.post('/', authenticate, asyncHandler(skillController.createSkill));
-router.put('/:id', authenticate, asyncHandler(skillController.updateSkill));
-router.delete('/:id', authenticate, asyncHandler(skillController.deleteSkill));
+router.get('/', asyncHandler(getSkills));
+router.get('/:id', asyncHandler(getSkillById));
+router.post('/', requireAuth, asyncHandler(createSkill));
+router.put('/:id', requireAuth, asyncHandler(updateSkill));
+router.delete('/:id', requireAuth, asyncHandler(deleteSkill));
 
-module.exports = router;
+export default router;

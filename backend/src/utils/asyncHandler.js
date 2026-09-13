@@ -1,8 +1,8 @@
 /**
- * Wraps an async route handler or middleware to catch and pass unhandled promise rejections to next()
+ * Async handler wrapper to catch unhandled errors and pass them to next middleware
  */
-const asyncHandler = (fn) => (req, res, next) => {
+export const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
-module.exports = asyncHandler;
+export default asyncHandler;

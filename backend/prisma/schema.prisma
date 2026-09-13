@@ -1,78 +1,103 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
 generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
 model AdminUser {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  role      String   @default("admin")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String?  @unique
+  passwordHash String
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@map("admin_users")
 }
 
 model Profile {
-  id                   Int      @id @default(autoincrement())
-  name                 String
-  title                String
-  college              String?
-  department           String?
-  course               String?
-  location             String?
-  email                String?
-  phone                String?
-  profileImageUrl      String?  @db.Text
-  profileImageFileName String?
-  cloudinaryPublicId   String?
-  fileType             String?
-  fileSize             Int?
-  bio                  String?  @db.Text
-  shortBio             String?  @db.Text
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id              String   @id @default(uuid())
+  name            String
+  role            String?
+  title           String?
+  college         String?
+  department      String?
+  degree          String?
+  course          String?
+  domain          String?
+  location        String?
+  email           String?
+  phone           String?
+  tagline         String?
+  bio             String?  @db.Text
+  shortBio        String?  @db.Text
+  heroDescription String?  @db.Text
+  aboutHeading    String?
+  aboutSubheading String?
+  avatarUrl       String?  @db.Text
+  avatarPublicId  String?
+  stats           Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@map("profiles")
 }
 
 model Hero {
-  id                  Int      @id @default(autoincrement())
-  title               String
-  subtitle            String?
+  id               String   @id @default(uuid())
+  greeting         String   @default("HELLO, I'M")
+  roleTitle        String?
+  tagline          String?
+  description      String?  @db.Text
+  primaryBtnText   String   @default("View My Work")
+  primaryBtnLink   String   @default("#projects")
+  secondaryBtnText String   @default("Let's Talk")
+  secondaryBtnLink String   @default("#contact")
+  talkLinkText     String   @default("Let's Talk")
+  resumeBtnText    String   @default("Download Resume")
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("hero_sections")
+}
+
+model About {
+  id                  String   @id @default(uuid())
+  heading             String?
+  subheading          String?
+  shortIntro          String?  @db.Text
   description         String?  @db.Text
-  primaryButtonText   String?
-  primaryButtonUrl    String?
-  secondaryButtonText String?
-  secondaryButtonUrl  String?
+  professionalSummary String?  @db.Text
+  yearsExperience     String?
+  projectsCompleted   String?
+  degree              String?
+  cgpa                String?
+  skillsHighlight     String?  @db.Text
+  imageUrl            String?  @db.Text
+  imagePublicId       String?
+  ctaText             String?
+  ctaLink             String?
+  resumeUrl           String?  @db.Text
+  email               String?
+  phone               String?
+  location            String?
+  coreFocus           Json?
+  paragraphs          Json?
+  highlights          Json?
   isActive            Boolean  @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  @@map("heroes")
-}
-
-model About {
-  id          Int      @id @default(autoincrement())
-  title       String
-  description String?  @db.Text
-  paragraphs  Json?
-  highlights  Json?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("abouts")
+  @@map("about_sections")
 }
 
 model Service {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   title       String
   description String   @db.Text
   icon        String?
@@ -81,73 +106,71 @@ model Service {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([order])
   @@map("services")
 }
 
 model Skill {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   name        String
   category    String
-  proficiency String?
+  proficiency Int      @default(85)
   icon        String?
   order       Int      @default(0)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([category])
-  @@index([order])
   @@map("skills")
 }
 
 model Project {
-  id               Int            @id @default(autoincrement())
-  title            String
-  slug             String         @unique
-  shortDescription String?        @db.Text
-  description      String         @db.Text
-  technologies     Json?
-  githubUrl        String?
-  liveUrl          String?
-  thumbnailUrl     String?        @db.Text
-  featured         Boolean        @default(false)
-  order            Int            @default(0)
-  isActive         Boolean        @default(true)
-  images           ProjectImage[]
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id                String         @id @default(uuid())
+  title             String
+  slug              String         @unique
+  shortDescription  String?        @db.Text
+  description       String?        @db.Text
+  tagline           String?
+  category          String?
+  technologies      Json?
+  features          Json?
+  githubUrl         String?
+  liveUrl           String?
+  liveDemoBtnText   String?
+  githubBtnText     String?
+  detailsBtnText    String?
+  thumbnailUrl      String?        @db.Text
+  thumbnailPublicId String?
+  featured          Boolean        @default(false)
+  order             Int            @default(0)
+  isActive          Boolean        @default(true)
+  images            ProjectImage[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
 
-  @@index([featured])
-  @@index([order])
   @@map("projects")
 }
 
 model ProjectImage {
-  id                 Int      @id @default(autoincrement())
-  projectId          Int
-  imageUrl           String   @db.Text
-  cloudinaryPublicId String?
-  fileName           String?
-  fileType           String?
-  fileSize           Int?
-  altText            String?
-  order              Int      @default(0)
+  id        String   @id @default(uuid())
+  projectId String
+  imageUrl  String   @db.Text
+  publicId  String
+  caption   String?
+  order     Int      @default(0)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
-  @@index([order])
   @@map("project_images")
 }
 
 model Experience {
-  id           Int      @id @default(autoincrement())
+  id           String   @id @default(uuid())
   company      String
   position     String
   location     String?
-  startDate    String
+  startDate    String?
   endDate      String?
   isCurrent    Boolean  @default(false)
   description  String?  @db.Text
@@ -157,12 +180,11 @@ model Experience {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@index([order])
   @@map("experiences")
 }
 
 model Education {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   institution String
   degree      String
   department  String?
@@ -175,63 +197,62 @@ model Education {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([order])
   @@map("educations")
 }
 
 model Certification {
-  id            Int      @id @default(autoincrement())
-  title         String
-  issuer        String
-  issueDate     String?
-  credentialId  String?
-  credentialUrl String?
-  fileUrl            String?  @db.Text
-  cloudinaryPublicId String?
-  fileName           String?
-  fileType           String?
-  fileSize           Int?
-  order         Int      @default(0)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  title               String
+  issuer              String
+  issueDate           String?
+  credentialId        String?
+  credentialUrl       String?
+  certificateUrl      String?  @db.Text
+  certificatePublicId String?
+  certificateFilename String?
+  certificateMimeType String?
+  certificateSize     Int?
+  skillsCovered       Json?
+  description         String?  @db.Text
+  order               Int      @default(0)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  @@index([order])
   @@map("certifications")
 }
 
 model Achievement {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   title       String
   description String?  @db.Text
   date        String?
-  link        String?
+  category    String?
   order       Int      @default(0)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([order])
   @@map("achievements")
 }
 
 model Resume {
-  id         Int      @id @default(autoincrement())
-  fileName           String
-  fileUrl            String   @db.Text
-  cloudinaryPublicId String?
-  fileType           String   @default("application/pdf")
-  fileSize           Int
-  isActive   Boolean  @default(true)
-  uploadedAt DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(uuid())
+  title     String   @default("Developer Resume")
+  fileName  String   @default("Dhanush-M-Resume.pdf")
+  fileUrl   String   @db.Text
+  publicId  String
+  mimeType  String   @default("application/pdf")
+  fileSize  Int?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@index([isActive])
   @@map("resumes")
 }
 
 model SocialLink {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   platform  String
   label     String
   url       String
@@ -241,58 +262,64 @@ model SocialLink {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([order])
   @@map("social_links")
 }
 
 model NavigationItem {
-  id           Int      @id @default(autoincrement())
+  id           String   @id @default(uuid())
   label        String
   url          String
+  target       String?
   order        Int      @default(0)
   isActive     Boolean  @default(true)
+  isVisible    Boolean  @default(true)
   openInNewTab Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@index([order])
   @@map("navigation_items")
 }
 
 model Footer {
-  id            Int      @id @default(autoincrement())
-  description   String?  @db.Text
-  copyrightText String?
-  email         String?
-  phone         String?
-  location      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                String   @id @default(uuid())
+  brandName         String?
+  brandRole         String?
+  tagline           String?
+  quickLinksHeading String?
+  deepLinksHeading  String?
+  contactHeading    String?
+  contactDesc       String?  @db.Text
+  copyrightText     String?
+  email             String?
+  phone             String?
+  location          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@map("footers")
 }
 
 model WebsiteSettings {
-  id                Int      @id @default(autoincrement())
-  siteTitle         String   @default("Dhanush M | Portfolio")
-  siteDescription   String?  @db.Text
-  faviconUrl        String?  @db.Text
-  metaKeywords      String?  @db.Text
-  googleAnalyticsId String?
-  maintenanceMode   Boolean  @default(false)
-  brandName         String?  @default("Dhanush M")
-  brandRole         String?  @default("Web Developer")
-  logoLetters       String?  @default("DM")
-  resumeBtnText     String?  @default("Resume")
-  talkBtnText       String?  @default("Let's Talk")
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  siteTitle          String?
+  siteDescription    String?  @db.Text
+  favicon            String?
+  metaKeywords       String?
+  googleAnalyticsId  String?
+  maintenanceMode    Boolean  @default(false)
+  brandName          String?
+  brandRole          String?
+  logoLetters        String?
+  resumeBtnText      String?
+  talkBtnText        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@map("website_settings")
 }
 
 model ContactMessage {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   name      String
   email     String
   subject   String
@@ -301,7 +328,21 @@ model ContactMessage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([isRead])
-  @@index([createdAt])
   @@map("contact_messages")
+}
+
+model HomepageSection {
+  id         String   @id @default(uuid())
+  sectionKey String   @unique
+  name       String?
+  label      String?
+  title      String?
+  subtitle   String?  @db.Text
+  order      Int      @default(0)
+  isVisible  Boolean  @default(true)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("homepage_sections")
 }

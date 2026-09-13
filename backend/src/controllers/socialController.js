@@ -1,31 +1,37 @@
-const { prisma } = require('../config/database');
-const { successResponse, errorResponse } = require('../utils/apiResponse');
+import prisma from '../config/database.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Get all social links
+ * Get Social Links
  * GET /api/social-links
  */
-async function getSocialLinks(req, res) {
-  const { all } = req.query;
-  const where = all === 'true' ? {} : { isActive: true };
+export const getSocialLinks = async (req, res) => {
+  const showAll = req.query.all === 'true';
+  const where = showAll ? {} : { isActive: true };
 
-  const socialLinks = await prisma.socialLink.findMany({
+  const links = await prisma.socialLink.findMany({
     where,
     orderBy: { order: 'asc' },
   });
 
-  return successResponse(res, socialLinks, 'Social links retrieved successfully');
-}
+  // Ensure name property is provided for frontend icon lookup
+  const mapped = links.map((l) => ({
+    ...l,
+    name: l.label || l.platform,
+  }));
+
+  return successResponse(res, 200, 'Social links retrieved', mapped);
+};
 
 /**
- * Create social link
+ * Create Social Link
  * POST /api/social-links
  */
-async function createSocialLink(req, res) {
+export const createSocialLink = async (req, res) => {
   const { platform, label, url, icon, order, isActive } = req.body;
 
   if (!platform || !url) {
-    return errorResponse(res, 'Platform and URL are required', 400);
+    return errorResponse(res, 400, 'Platform and URL are required');
   }
 
   const newLink = await prisma.socialLink.create({
@@ -33,92 +39,101 @@ async function createSocialLink(req, res) {
       platform,
       label: label || platform,
       url,
-      icon: icon || null,
+      icon: icon || `${platform}Icon`,
       order: order !== undefined ? Number(order) : 0,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     },
   });
 
-  return successResponse(res, newLink, 'Social link created successfully', 201);
-}
+  return successResponse(res, 201, 'Social link created successfully', {
+    ...newLink,
+    name: newLink.label || newLink.platform,
+  });
+};
 
 /**
- * Update social link
+ * Update Individual Social Link
  * PUT /api/social-links/:id
  */
-async function updateSocialLink(req, res) {
+export const updateSocialLink = async (req, res) => {
   const { id } = req.params;
-  const { platform, label, url, icon, order, isActive } = req.body;
+  const data = req.body;
 
-  const updateData = {};
-  if (platform !== undefined) updateData.platform = platform;
-  if (label !== undefined) updateData.label = label;
-  if (url !== undefined) updateData.url = url;
-  if (icon !== undefined) updateData.icon = icon;
-  if (order !== undefined) updateData.order = Number(order);
-  if (isActive !== undefined) updateData.isActive = Boolean(isActive);
-
-  const updated = await prisma.socialLink.update({
-    where: { id: Number(id) },
-    data: updateData,
-  });
-
-  return successResponse(res, updated, 'Social link updated successfully');
-}
-
-/**
- * Bulk update social links
- * PUT /api/social-links
- */
-async function updateSocialLinks(req, res) {
-  const links = Array.isArray(req.body) ? req.body : req.body.links;
-  if (!Array.isArray(links)) {
-    return errorResponse(res, 'Array of links required', 400);
+  const existing = await prisma.socialLink.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Social link not found');
   }
 
-  const results = [];
-  for (let i = 0; i < links.length; i++) {
-    const item = links[i];
-    const platform = item.platform || item.name || 'other';
-    const label = item.label || item.name || platform;
-    const url = item.url;
-    const icon = item.icon || null;
-    const order = item.order !== undefined ? Number(item.order) : i + 1;
-    const isActive = item.isActive !== undefined ? Boolean(item.isActive) : true;
+  const updated = await prisma.socialLink.update({
+    where: { id },
+    data: {
+      ...(data.platform !== undefined && { platform: data.platform }),
+      ...(data.label !== undefined && { label: data.label }),
+      ...(data.url !== undefined && { url: data.url }),
+      ...(data.icon !== undefined && { icon: data.icon }),
+      ...(data.order !== undefined && { order: Number(data.order) }),
+      ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
+    },
+  });
 
-    if (item.id && !isNaN(Number(item.id))) {
-      const updated = await prisma.socialLink.upsert({
-        where: { id: Number(item.id) },
-        update: { platform, label, url, icon, order, isActive },
-        create: { platform, label, url, icon, order, isActive },
+  return successResponse(res, 200, 'Social link updated successfully', {
+    ...updated,
+    name: updated.label || updated.platform,
+  });
+};
+
+/**
+ * Update Multiple Social Links (Bulk Reorder / Save)
+ * PUT /api/social-links
+ */
+export const updateSocialLinks = async (req, res) => {
+  const { links } = req.body;
+  const items = Array.isArray(links) ? links : req.body;
+
+  if (!Array.isArray(items)) {
+    return errorResponse(res, 400, 'Expected array of social links');
+  }
+
+  const updatedItems = [];
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx];
+    if (item.id) {
+      const up = await prisma.socialLink.update({
+        where: { id: item.id },
+        data: {
+          ...(item.platform !== undefined && { platform: item.platform }),
+          ...(item.label !== undefined && { label: item.label }),
+          ...(item.url !== undefined && { url: item.url }),
+          ...(item.icon !== undefined && { icon: item.icon }),
+          ...(item.isActive !== undefined && { isActive: Boolean(item.isActive) }),
+          order: item.order !== undefined ? Number(item.order) : idx + 1,
+        },
       });
-      results.push(updated);
-    } else {
-      const created = await prisma.socialLink.create({
-        data: { platform, label, url, icon, order, isActive },
-      });
-      results.push(created);
+      updatedItems.push({ ...up, name: up.label || up.platform });
     }
   }
 
-  return successResponse(res, results, 'Social links updated successfully');
-}
+  return successResponse(res, 200, 'Social links updated successfully', updatedItems);
+};
 
 /**
- * Delete social link
+ * Delete Social Link
  * DELETE /api/social-links/:id
  */
-async function deleteSocialLink(req, res) {
+export const deleteSocialLink = async (req, res) => {
   const { id } = req.params;
 
-  await prisma.socialLink.delete({
-    where: { id: Number(id) },
-  });
+  const existing = await prisma.socialLink.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Social link not found');
+  }
 
-  return successResponse(res, null, 'Social link deleted successfully');
-}
+  await prisma.socialLink.delete({ where: { id } });
 
-module.exports = {
+  return successResponse(res, 200, 'Social link deleted successfully');
+};
+
+export default {
   getSocialLinks,
   createSocialLink,
   updateSocialLink,

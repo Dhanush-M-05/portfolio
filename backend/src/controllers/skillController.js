@@ -1,18 +1,19 @@
-const { prisma } = require('../config/database');
-const { successResponse, errorResponse } = require('../utils/apiResponse');
+import prisma from '../config/database.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Get skills (filters by category and active status)
+ * Get Skills
  * GET /api/skills
  */
-async function getSkills(req, res) {
-  const { category, all } = req.query;
+export const getSkills = async (req, res) => {
+  const showAll = req.query.all === 'true';
+  const { category } = req.query;
 
   const where = {};
-  if (all !== 'true') {
+  if (!showAll) {
     where.isActive = true;
   }
-  if (category) {
+  if (category && category !== 'all') {
     where.category = category;
   }
 
@@ -21,110 +22,120 @@ async function getSkills(req, res) {
     orderBy: { order: 'asc' },
   });
 
-  return successResponse(res, skills, 'Skills retrieved successfully');
-}
+  // Also collect distinct categories for frontend filtering
+  const categoriesRaw = await prisma.skill.findMany({
+    where: showAll ? {} : { isActive: true },
+    select: { category: true },
+    distinct: ['category'],
+  });
+  const categories = categoriesRaw.map((c) => c.category);
+
+  return res.status(200).json({
+    success: true,
+    message: 'Skills retrieved',
+    data: skills,
+    skills,
+    categories,
+  });
+};
 
 /**
- * Get single skill by ID
+ * Get Skill by ID
  * GET /api/skills/:id
  */
-async function getSkillById(req, res) {
+export const getSkillById = async (req, res) => {
   const { id } = req.params;
-  const isNum = /^\d+$/.test(id);
-
   const skill = await prisma.skill.findUnique({
-    where: isNum ? { id: Number(id) } : { name: id },
+    where: { id },
   });
 
   if (!skill) {
-    return errorResponse(res, 'Skill not found', 404);
+    return errorResponse(res, 404, 'Skill not found');
   }
 
-  return successResponse(res, skill, 'Skill retrieved successfully');
-}
+  return successResponse(res, 200, 'Skill retrieved', skill);
+};
 
 /**
- * Create skill
+ * Create Skill
  * POST /api/skills
  */
-async function createSkill(req, res) {
+export const createSkill = async (req, res) => {
   const { name, category, proficiency, icon, order, isActive } = req.body;
 
   if (!name || !category) {
-    return errorResponse(res, 'Name and category are required', 400);
+    return errorResponse(res, 400, 'Name and category are required');
   }
 
   const newSkill = await prisma.skill.create({
     data: {
       name,
       category,
-      proficiency: proficiency ? String(proficiency) : null,
-      icon: icon || null,
+      proficiency: proficiency !== undefined ? Number(proficiency) : 85,
+      icon: icon || 'code',
       order: order !== undefined ? Number(order) : 0,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     },
   });
 
-  return successResponse(res, newSkill, 'Skill created successfully', 201);
-}
+  return successResponse(res, 201, 'Skill created successfully', newSkill);
+};
 
 /**
- * Update skill
+ * Update Skill
  * PUT /api/skills/:id
  */
-async function updateSkill(req, res) {
+export const updateSkill = async (req, res) => {
   const { id } = req.params;
   const { name, category, proficiency, icon, order, isActive } = req.body;
-  const isNum = /^\d+$/.test(id);
 
-  const existing = await prisma.skill.findUnique({
-    where: isNum ? { id: Number(id) } : { name: id },
-  });
-
+  // Search by ID first, or by name if frontend passed skill name
+  let existing = await prisma.skill.findUnique({ where: { id } });
   if (!existing) {
-    return errorResponse(res, 'Skill not found', 404);
+    existing = await prisma.skill.findFirst({ where: { name: id } });
   }
 
-  const updateData = {};
-  if (name !== undefined) updateData.name = name;
-  if (category !== undefined) updateData.category = category;
-  if (proficiency !== undefined) updateData.proficiency = String(proficiency);
-  if (icon !== undefined) updateData.icon = icon;
-  if (order !== undefined) updateData.order = Number(order);
-  if (isActive !== undefined) updateData.isActive = Boolean(isActive);
+  if (!existing) {
+    return errorResponse(res, 404, 'Skill not found');
+  }
 
-  const updatedSkill = await prisma.skill.update({
+  const updated = await prisma.skill.update({
     where: { id: existing.id },
-    data: updateData,
+    data: {
+      ...(name !== undefined && { name }),
+      ...(category !== undefined && { category }),
+      ...(proficiency !== undefined && { proficiency: Number(proficiency) }),
+      ...(icon !== undefined && { icon }),
+      ...(order !== undefined && { order: Number(order) }),
+      ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+    },
   });
 
-  return successResponse(res, updatedSkill, 'Skill updated successfully');
-}
+  return successResponse(res, 200, 'Skill updated successfully', updated);
+};
 
 /**
- * Delete skill
+ * Delete Skill
  * DELETE /api/skills/:id
  */
-async function deleteSkill(req, res) {
+export const deleteSkill = async (req, res) => {
   const { id } = req.params;
-  const isNum = /^\d+$/.test(id);
 
-  const existing = await prisma.skill.findUnique({
-    where: isNum ? { id: Number(id) } : { name: id },
-  });
-
+  let existing = await prisma.skill.findUnique({ where: { id } });
   if (!existing) {
-    return errorResponse(res, 'Skill not found', 404);
+    existing = await prisma.skill.findFirst({ where: { name: id } });
   }
 
-  await prisma.skill.delete({
-    where: { id: existing.id },
-  });
+  if (!existing) {
+    return errorResponse(res, 404, 'Skill not found');
+  }
 
-  return successResponse(res, null, 'Skill deleted successfully');
-}
+  await prisma.skill.delete({ where: { id: existing.id } });
 
-module.exports = {
+  return successResponse(res, 200, 'Skill deleted successfully');
+};
+
+export default {
   getSkills,
   getSkillById,
   createSkill,

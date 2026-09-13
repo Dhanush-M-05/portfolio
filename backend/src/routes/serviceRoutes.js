@@ -1,16 +1,20 @@
-const express = require('express');
-const router = express.Router();
-const serviceController = require('../controllers/serviceController');
-const asyncHandler = require('../utils/asyncHandler');
-const { authenticate } = require('../middleware/authMiddleware');
+import { Router } from 'express';
+import {
+  getServices,
+  getServiceById,
+  createService,
+  updateService,
+  deleteService,
+} from '../controllers/serviceController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public
-router.get('/', asyncHandler(serviceController.getServices));
-router.get('/:id', asyncHandler(serviceController.getServiceById));
+const router = Router();
 
-// Admin Protected
-router.post('/', authenticate, asyncHandler(serviceController.createService));
-router.put('/:id', authenticate, asyncHandler(serviceController.updateService));
-router.delete('/:id', authenticate, asyncHandler(serviceController.deleteService));
+router.get('/', asyncHandler(getServices));
+router.get('/:id', asyncHandler(getServiceById));
+router.post('/', requireAuth, asyncHandler(createService));
+router.put('/:id', requireAuth, asyncHandler(updateService));
+router.delete('/:id', requireAuth, asyncHandler(deleteService));
 
-module.exports = router;
+export default router;

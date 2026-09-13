@@ -1,102 +1,108 @@
-const { prisma } = require('../config/database');
-const { successResponse, errorResponse } = require('../utils/apiResponse');
+import prisma from '../config/database.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Get all services (Public returns active, query all=true or admin can see all)
+ * Get Services
  * GET /api/services
  */
-async function getServices(req, res) {
-  const { all } = req.query;
-  const where = all === 'true' ? {} : { isActive: true };
+export const getServices = async (req, res) => {
+  const showAll = req.query.all === 'true';
+  const where = showAll ? {} : { isActive: true };
 
   const services = await prisma.service.findMany({
     where,
     orderBy: { order: 'asc' },
   });
 
-  return successResponse(res, services, 'Services retrieved successfully');
-}
+  return successResponse(res, 200, 'Services retrieved', services);
+};
 
 /**
- * Get single service by ID
+ * Get Service by ID
  * GET /api/services/:id
  */
-async function getServiceById(req, res) {
+export const getServiceById = async (req, res) => {
   const { id } = req.params;
-
   const service = await prisma.service.findUnique({
-    where: { id: Number(id) },
+    where: { id },
   });
 
   if (!service) {
-    return errorResponse(res, 'Service not found', 404);
+    return errorResponse(res, 404, 'Service not found');
   }
 
-  return successResponse(res, service, 'Service retrieved successfully');
-}
+  return successResponse(res, 200, 'Service retrieved', service);
+};
 
 /**
- * Create new service
+ * Create Service
  * POST /api/services
  */
-async function createService(req, res) {
+export const createService = async (req, res) => {
   const { title, description, icon, order, isActive } = req.body;
 
   if (!title || !description) {
-    return errorResponse(res, 'Title and description are required', 400);
+    return errorResponse(res, 400, 'Title and description are required');
   }
 
   const newService = await prisma.service.create({
     data: {
       title,
       description,
-      icon: icon || null,
+      icon: icon || 'CodeIcon',
       order: order !== undefined ? Number(order) : 0,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     },
   });
 
-  return successResponse(res, newService, 'Service created successfully', 201);
-}
+  return successResponse(res, 201, 'Service created successfully', newService);
+};
 
 /**
- * Update service
+ * Update Service
  * PUT /api/services/:id
  */
-async function updateService(req, res) {
+export const updateService = async (req, res) => {
   const { id } = req.params;
   const { title, description, icon, order, isActive } = req.body;
 
-  const updateData = {};
-  if (title !== undefined) updateData.title = title;
-  if (description !== undefined) updateData.description = description;
-  if (icon !== undefined) updateData.icon = icon;
-  if (order !== undefined) updateData.order = Number(order);
-  if (isActive !== undefined) updateData.isActive = Boolean(isActive);
+  const existing = await prisma.service.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Service not found');
+  }
 
-  const updatedService = await prisma.service.update({
-    where: { id: Number(id) },
-    data: updateData,
+  const updated = await prisma.service.update({
+    where: { id },
+    data: {
+      ...(title !== undefined && { title }),
+      ...(description !== undefined && { description }),
+      ...(icon !== undefined && { icon }),
+      ...(order !== undefined && { order: Number(order) }),
+      ...(isActive !== undefined && { isActive: Boolean(isActive) }),
+    },
   });
 
-  return successResponse(res, updatedService, 'Service updated successfully');
-}
+  return successResponse(res, 200, 'Service updated successfully', updated);
+};
 
 /**
- * Delete service
+ * Delete Service
  * DELETE /api/services/:id
  */
-async function deleteService(req, res) {
+export const deleteService = async (req, res) => {
   const { id } = req.params;
 
-  await prisma.service.delete({
-    where: { id: Number(id) },
-  });
+  const existing = await prisma.service.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Service not found');
+  }
 
-  return successResponse(res, null, 'Service deleted successfully');
-}
+  await prisma.service.delete({ where: { id } });
 
-module.exports = {
+  return successResponse(res, 200, 'Service deleted successfully');
+};
+
+export default {
   getServices,
   getServiceById,
   createService,

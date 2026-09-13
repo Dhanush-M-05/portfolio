@@ -1,19 +1,17 @@
-const express = require('express');
-const router = express.Router();
-const authController = require('../controllers/authController');
-const asyncHandler = require('../utils/asyncHandler');
-const { loginValidator } = require('../validators/authValidator');
-const { authenticate } = require('../middleware/authMiddleware');
-const { authLimiter } = require('../middleware/rateLimitMiddleware');
+import { Router } from 'express';
+import { login, logout, getMe, verify, changePassword } from '../controllers/authController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import { authLimiter } from '../middleware/rateLimitMiddleware.js';
+import { validateBody } from '../middleware/validationMiddleware.js';
+import { validateLogin } from '../validators/authValidator.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public login (rate limited to protect against brute-force)
-router.post('/login', authLimiter, loginValidator, asyncHandler(authController.login));
+const router = Router();
 
-// Protected auth endpoints
-router.post('/logout', authenticate, asyncHandler(authController.logout));
-router.get('/me', authenticate, asyncHandler(authController.getMe));
-router.get('/verify', authenticate, (req, res) => {
-  res.status(200).json({ success: true, valid: true, user: req.user });
-});
+router.post('/login', authLimiter, validateBody(validateLogin), asyncHandler(login));
+router.post('/logout', asyncHandler(logout));
+router.get('/me', requireAuth, asyncHandler(getMe));
+router.get('/verify', requireAuth, asyncHandler(verify));
+router.put('/password', requireAuth, asyncHandler(changePassword));
 
-module.exports = router;
+export default router;

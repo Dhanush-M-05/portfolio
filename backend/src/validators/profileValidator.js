@@ -1,42 +1,23 @@
-const { body } = require('express-validator');
-const { validate } = require('../middleware/validationMiddleware');
+export const validateProfile = (data) => {
+  const errors = {};
 
-const updateProfileValidator = [
-  body('name')
-    .optional()
-    .trim()
-    .notEmpty()
-    .withMessage('Name cannot be empty')
-    .isLength({ max: 100 })
-    .withMessage('Name must not exceed 100 characters'),
-  body('title')
-    .optional()
-    .trim()
-    .isLength({ max: 150 })
-    .withMessage('Title must not exceed 150 characters'),
-  body('email')
-    .optional({ checkFalsy: true })
-    .trim()
-    .isEmail()
-    .withMessage('Please provide a valid email address')
-    .normalizeEmail(),
-  body('phone')
-    .optional({ checkFalsy: true })
-    .trim()
-    .isLength({ max: 30 })
-    .withMessage('Phone number must not exceed 30 characters'),
-  body('profileImageUrl')
-    .optional({ checkFalsy: true })
-    .trim(),
-  body('bio')
-    .optional()
-    .isString(),
-  body('shortBio')
-    .optional()
-    .isString(),
-  validate,
-];
+  if (data.name !== undefined && (!data.name || typeof data.name !== 'string' || !data.name.trim())) {
+    errors.name = 'Profile name cannot be empty';
+  }
 
-module.exports = {
-  updateProfileValidator,
+  if (data.email && typeof data.email === 'string') {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(data.email.trim())) {
+      errors.email = 'Please provide a valid email address';
+    }
+  }
+
+  return {
+    isValid: Object.keys(errors).length === 0,
+    errors,
+  };
+};
+
+export default {
+  validateProfile,
 };

@@ -1,71 +1,62 @@
-const { prisma } = require('../config/database');
-const { successResponse } = require('../utils/apiResponse');
+import prisma from '../config/database.js';
+import { successResponse } from '../utils/apiResponse.js';
 
 /**
- * Helper to get or create singleton Hero
+ * Get Hero Section
+ * GET /api/hero
  */
-async function getOrCreateHero() {
+export const getHero = async (req, res) => {
   let hero = await prisma.hero.findFirst();
+
   if (!hero) {
     hero = await prisma.hero.create({
       data: {
-        title: "HELLO, I'M",
-        subtitle: 'Dhanush M',
-        description: 'Web Developer / Full Stack Developer',
-        primaryButtonText: 'View My Work',
-        primaryButtonUrl: '#projects',
-        secondaryButtonText: "Let's Talk",
-        secondaryButtonUrl: '#contact',
+        greeting: "HELLO, I'M",
+        roleTitle: 'Web Developer',
+        tagline: 'Engineering robust frontend experiences and scalable backend services.',
+        description: 'Specializing in React, Node.js, Express, MySQL, and modern web application development.',
+        primaryBtnText: 'View My Work',
+        primaryBtnLink: '#projects',
+        secondaryBtnText: "Let's Talk",
+        secondaryBtnLink: '#contact',
+        talkLinkText: "Let's Talk",
+        resumeBtnText: 'Download Resume',
         isActive: true,
       },
     });
   }
-  return hero;
-}
+
+  return successResponse(res, 200, 'Hero section retrieved', hero);
+};
 
 /**
- * Get Hero section
- * GET /api/hero
- */
-async function getHero(req, res) {
-  const hero = await getOrCreateHero();
-  return successResponse(res, hero, 'Hero section retrieved successfully');
-}
-
-/**
- * Update Hero section
+ * Update Hero Section
  * PUT /api/hero
  */
-async function updateHero(req, res) {
-  const existing = await getOrCreateHero();
+export const updateHero = async (req, res) => {
+  let hero = await prisma.hero.findFirst();
+  const updateData = { ...req.body };
 
-  const allowedFields = [
-    'title',
-    'subtitle',
-    'description',
-    'primaryButtonText',
-    'primaryButtonUrl',
-    'secondaryButtonText',
-    'secondaryButtonUrl',
-    'isActive',
-  ];
+  delete updateData.id;
+  delete updateData.createdAt;
+  delete updateData.updatedAt;
 
-  const updateData = {};
-  for (const field of allowedFields) {
-    if (req.body[field] !== undefined) {
-      updateData[field] = req.body[field];
-    }
+  let updated;
+  if (hero) {
+    updated = await prisma.hero.update({
+      where: { id: hero.id },
+      data: updateData,
+    });
+  } else {
+    updated = await prisma.hero.create({
+      data: updateData,
+    });
   }
 
-  const updatedHero = await prisma.hero.update({
-    where: { id: existing.id },
-    data: updateData,
-  });
+  return successResponse(res, 200, 'Hero section updated successfully', updated);
+};
 
-  return successResponse(res, updatedHero, 'Hero section updated successfully');
-}
-
-module.exports = {
+export default {
   getHero,
   updateHero,
 };

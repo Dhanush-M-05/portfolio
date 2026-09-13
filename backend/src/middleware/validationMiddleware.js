@@ -1,25 +1,16 @@
-const { validationResult } = require('express-validator');
-const { validationErrorResponse } = require('../utils/apiResponse');
+import { errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Middleware to intercept express-validator errors and return standard 422 JSON response
+ * Higher-order middleware to run a validation function against req.body
  */
-function validate(req, res, next) {
-  const errors = validationResult(req);
-
-  if (!errors.isEmpty()) {
-    const formattedErrors = errors.array().map((err) => ({
-      field: err.path || err.param,
-      message: err.msg,
-      value: err.value,
-    }));
-
-    return validationErrorResponse(res, formattedErrors, 'Validation failed');
-  }
-
-  next();
-}
-
-module.exports = {
-  validate,
+export const validateBody = (validatorFn) => {
+  return (req, res, next) => {
+    const { isValid, errors } = validatorFn(req.body);
+    if (!isValid) {
+      return errorResponse(res, 422, 'Validation failed', errors);
+    }
+    next();
+  };
 };
+
+export default validateBody;

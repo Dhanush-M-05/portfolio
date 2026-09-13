@@ -1,18 +1,24 @@
-const express = require('express');
-const router = express.Router();
-const contactController = require('../controllers/contactController');
-const asyncHandler = require('../utils/asyncHandler');
-const { createContactValidator } = require('../validators/contactValidator');
-const { authenticate } = require('../middleware/authMiddleware');
-const { contactLimiter } = require('../middleware/rateLimitMiddleware');
+import { Router } from 'express';
+import {
+  submitContact,
+  getMessages,
+  getMessageById,
+  markMessageRead,
+  deleteMessage,
+} from '../controllers/contactController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import { contactLimiter } from '../middleware/rateLimitMiddleware.js';
+import { validateBody } from '../middleware/validationMiddleware.js';
+import { validateContact } from '../validators/contactValidator.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public Contact Form (rate limited against spam)
-router.post('/', contactLimiter, createContactValidator, asyncHandler(contactController.submitContactMessage));
+const router = Router();
 
-// Admin Protected Message Management
-router.get('/', authenticate, asyncHandler(contactController.getContactMessages));
-router.get('/:id', authenticate, asyncHandler(contactController.getContactMessageById));
-router.patch('/:id/read', authenticate, asyncHandler(contactController.markMessageAsRead));
-router.delete('/:id', authenticate, asyncHandler(contactController.deleteContactMessage));
+router.post('/', contactLimiter, validateBody(validateContact), asyncHandler(submitContact));
+router.get('/', requireAuth, asyncHandler(getMessages));
+router.get('/:id', requireAuth, asyncHandler(getMessageById));
+router.patch('/:id/read', requireAuth, asyncHandler(markMessageRead));
+router.put('/:id/read', requireAuth, asyncHandler(markMessageRead));
+router.delete('/:id', requireAuth, asyncHandler(deleteMessage));
 
-module.exports = router;
+export default router;

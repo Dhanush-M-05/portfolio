@@ -1,203 +1,129 @@
-const { prisma } = require('../config/database');
-const {
-  successResponse,
-  errorResponse,
-  paginatedResponse,
-} = require('../utils/apiResponse');
-
-function formatExperience(e) {
-  if (!e) return e;
-  return {
-    ...e,
-    organization: e.company,
-    role: e.position,
-    period: e.startDate + (e.endDate ? ` – ${e.endDate}` : ''),
-  };
-}
+import prisma from '../config/database.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Get all experiences
+ * Get Experiences
  * GET /api/experience
  */
-async function getExperiences(req, res) {
-  const { page, limit, all } = req.query;
-
-  const where = all === 'true' ? {} : { isActive: true };
-
-  if (page || limit) {
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
-    const skip = (pageNum - 1) * limitNum;
-
-    const [total, experiences] = await Promise.all([
-      prisma.experience.count({ where }),
-      prisma.experience.findMany({
-        where,
-        orderBy: { order: 'asc' },
-        skip,
-        take: limitNum,
-      }),
-    ]);
-
-    return paginatedResponse(res, experiences.map(formatExperience), total, pageNum, limitNum, 'Experiences retrieved successfully');
-  }
+export const getExperience = async (req, res) => {
+  const showAll = req.query.all === 'true';
+  const where = showAll ? {} : { isActive: true };
 
   const experiences = await prisma.experience.findMany({
     where,
     orderBy: { order: 'asc' },
   });
 
-  return successResponse(res, experiences.map(formatExperience), 'Experiences retrieved successfully');
-}
+  return successResponse(res, 200, 'Experiences retrieved', experiences);
+};
 
 /**
- * Get single experience
+ * Get Experience by ID
  * GET /api/experience/:id
  */
-async function getExperienceById(req, res) {
+export const getExperienceById = async (req, res) => {
   const { id } = req.params;
-
   const experience = await prisma.experience.findUnique({
-    where: { id: Number(id) },
+    where: { id },
   });
 
   if (!experience) {
-    return errorResponse(res, 'Experience not found', 404);
+    return errorResponse(res, 404, 'Experience entry not found');
   }
 
-  return successResponse(res, formatExperience(experience), 'Experience retrieved successfully');
-}
+  return successResponse(res, 200, 'Experience retrieved', experience);
+};
 
 /**
- * Create experience
+ * Create Experience
  * POST /api/experience
  */
-async function createExperience(req, res) {
-  const {
-    company,
-    position,
-    location,
-    startDate,
-    endDate,
-    isCurrent,
-    description,
-    technologies,
-    order,
-    isActive,
-  } = req.body;
+export const createExperience = async (req, res) => {
+  const { company, position, location, startDate, endDate, isCurrent, description, technologies, order, isActive } = req.body;
 
-  const companyName = company || req.body.organization;
-  const positionTitle = position || req.body.role;
-  const start = startDate || req.body.period || req.body.duration || 'Current';
+  if (!company || !position) {
+    return errorResponse(res, 400, 'Company and position are required');
+  }
 
-  if (!companyName || !positionTitle) {
-    return errorResponse(res, 'Company (or organization) and position (or role) are required', 400);
+  let tech = technologies;
+  if (typeof tech === 'string') {
+    tech = tech.split(',').map((t) => t.trim()).filter(Boolean);
   }
 
   const newExperience = await prisma.experience.create({
     data: {
-      company: companyName,
-      position: positionTitle,
-      location: location || null,
-      startDate: start,
-      endDate: endDate || null,
+      company,
+      position,
+      location: location || '',
+      startDate: startDate || '',
+      endDate: endDate || '',
       isCurrent: isCurrent !== undefined ? Boolean(isCurrent) : false,
-      description: description || null,
-      technologies: Array.isArray(technologies)
-        ? technologies
-        : typeof technologies === 'string'
-        ? JSON.parse(technologies)
-        : null,
+      description: description || '',
+      technologies: tech || [],
       order: order !== undefined ? Number(order) : 0,
       isActive: isActive !== undefined ? Boolean(isActive) : true,
     },
   });
 
-  const formatted = {
-    ...newExperience,
-    organization: newExperience.company,
-    role: newExperience.position,
-    period: newExperience.startDate + (newExperience.endDate ? ` – ${newExperience.endDate}` : ''),
-  };
-
-  return successResponse(res, formatted, 'Experience created successfully', 201);
-}
+  return successResponse(res, 201, 'Experience created successfully', newExperience);
+};
 
 /**
- * Update experience
+ * Update Experience
  * PUT /api/experience/:id
  */
-async function updateExperience(req, res) {
+export const updateExperience = async (req, res) => {
   const { id } = req.params;
-  const {
-    company,
-    position,
-    location,
-    startDate,
-    endDate,
-    isCurrent,
-    description,
-    technologies,
-    order,
-    isActive,
-  } = req.body;
+  const data = req.body;
 
-  const updateData = {};
-  if (company !== undefined || req.body.organization !== undefined) {
-    updateData.company = company || req.body.organization;
-  }
-  if (position !== undefined || req.body.role !== undefined) {
-    updateData.position = position || req.body.role;
-  }
-  if (location !== undefined) updateData.location = location;
-  if (startDate !== undefined || req.body.period !== undefined) {
-    updateData.startDate = startDate || req.body.period;
-  }
-  if (endDate !== undefined) updateData.endDate = endDate;
-  if (isCurrent !== undefined) updateData.isCurrent = Boolean(isCurrent);
-  if (description !== undefined) updateData.description = description;
-  if (order !== undefined) updateData.order = Number(order);
-  if (isActive !== undefined) updateData.isActive = Boolean(isActive);
-
-  if (technologies !== undefined) {
-    updateData.technologies = Array.isArray(technologies)
-      ? technologies
-      : typeof technologies === 'string'
-      ? JSON.parse(technologies)
-      : null;
+  const existing = await prisma.experience.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Experience entry not found');
   }
 
-  const updatedExperience = await prisma.experience.update({
-    where: { id: Number(id) },
-    data: updateData,
+  let tech = data.technologies;
+  if (typeof tech === 'string') {
+    tech = tech.split(',').map((t) => t.trim()).filter(Boolean);
+  }
+
+  const updated = await prisma.experience.update({
+    where: { id },
+    data: {
+      ...(data.company !== undefined && { company: data.company }),
+      ...(data.position !== undefined && { position: data.position }),
+      ...(data.location !== undefined && { location: data.location }),
+      ...(data.startDate !== undefined && { startDate: data.startDate }),
+      ...(data.endDate !== undefined && { endDate: data.endDate }),
+      ...(data.isCurrent !== undefined && { isCurrent: Boolean(data.isCurrent) }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(tech !== undefined && { technologies: tech }),
+      ...(data.order !== undefined && { order: Number(data.order) }),
+      ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
+    },
   });
 
-  const formatted = {
-    ...updatedExperience,
-    organization: updatedExperience.company,
-    role: updatedExperience.position,
-    period: updatedExperience.startDate + (updatedExperience.endDate ? ` – ${updatedExperience.endDate}` : ''),
-  };
-
-  return successResponse(res, formatted, 'Experience updated successfully');
-}
+  return successResponse(res, 200, 'Experience updated successfully', updated);
+};
 
 /**
- * Delete experience
+ * Delete Experience
  * DELETE /api/experience/:id
  */
-async function deleteExperience(req, res) {
+export const deleteExperience = async (req, res) => {
   const { id } = req.params;
 
-  await prisma.experience.delete({
-    where: { id: Number(id) },
-  });
+  const existing = await prisma.experience.findUnique({ where: { id } });
+  if (!existing) {
+    return errorResponse(res, 404, 'Experience entry not found');
+  }
 
-  return successResponse(res, null, 'Experience deleted successfully');
-}
+  await prisma.experience.delete({ where: { id } });
 
-module.exports = {
-  getExperiences,
+  return successResponse(res, 200, 'Experience deleted successfully');
+};
+
+export default {
+  getExperience,
   getExperienceById,
   createExperience,
   updateExperience,

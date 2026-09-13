@@ -1,77 +1,40 @@
-const app = require('./app');
-const environment = require('./config/environment');
-const { connectDatabase, disconnectDatabase } = require('./config/database');
-const { verifyEmailTransporter } = require('./services/emailService');
+import app from './app.js';
+import ENV from './config/environment.js';
+import prisma from './config/database.js';
+import { syncAdminCredentials } from './utils/authSync.js';
 
-const PORT = environment.PORT;
+const PORT = ENV.PORT || 5000;
 
-let server;
+const server = app.listen(PORT, async () => {
+  console.log(`🚀 Portfolio REST API backend running on http://localhost:${PORT}`);
+  console.log(`📡 Environment: ${ENV.NODE_ENV}`);
+  console.log(`🔒 Allowed CORS Frontend: ${ENV.FRONTEND_URL}`);
 
-/**
- * Bootstrap the HTTP server
- */
-async function startServer() {
   try {
-    // 1. Verify database connectivity
-    await connectDatabase();
-
-    // 2. Verify email transporter (non-fatal check)
-    await verifyEmailTransporter().catch((err) => {
-      console.warn('[EmailService] SMTP verification notice:', err.message);
-    });
-
-    // 3. Start HTTP listener
-    server = app.listen(PORT, () => {
-      console.log('====================================================');
-      console.log(`🚀 Portfolio Backend Server running on port ${PORT}`);
-      console.log(`📡 Environment: ${environment.NODE_ENV}`);
-      console.log(`🌐 Allowed Frontend: ${environment.FRONTEND_URL}`);
-      console.log(`🩺 Health check: http://localhost:${PORT}/api/health`);
-      console.log('====================================================');
-    });
+    await prisma.$connect();
+    console.log('✅ Connected to MySQL database via Prisma');
+    await syncAdminCredentials();
   } catch (error) {
-    console.error('Failed to start server due to startup error:', error.message);
-    process.exit(1);
+    console.error('❌ Failed to connect to MySQL database:', error.message);
+    console.log('ℹ️ Please ensure MySQL is running and DATABASE_URL in .env is correct.');
   }
-}
+});
 
-/**
- * Graceful shutdown procedure
- */
-async function gracefulShutdown(signal) {
-  console.log(`\n[Server] Received ${signal}. Starting graceful shutdown...`);
-
-  if (server) {
-    server.close(async () => {
-      console.log('[Server] HTTP server closed.');
-      await disconnectDatabase();
-      console.log('[Server] Graceful shutdown completed. Exiting.');
-      process.exit(0);
-    });
-
-    // Force close after 10 seconds if shutdown hangs
-    setTimeout(() => {
-      console.error('[Server] Could not close connections in time, forcefully shutting down');
-      process.exit(1);
-    }, 10000);
-  } else {
-    await disconnectDatabase();
+// Graceful Shutdown
+const handleGracefulShutdown = async (signal) => {
+  console.log(`\n🛑 Received ${signal}. Shutting down gracefully...`);
+  server.close(async () => {
+    console.log('💤 HTTP server closed.');
+    await prisma.$disconnect();
+    console.log('🔌 Database connection closed.');
     process.exit(0);
-  }
-}
+  });
 
-// Register process signal handlers
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  setTimeout(() => {
+    console.error('⚠️ Could not close connections in time, forcefully shutting down');
+    process.exit(1);
+  }, 10000);
+};
 
-// Process-level unhandled errors
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('[Server] Uncaught Exception thrown:', error);
-  gracefulShutdown('uncaughtException');
-});
-
-startServer();
+process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));

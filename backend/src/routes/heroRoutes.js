@@ -1,13 +1,11 @@
-const express = require('express');
-const router = express.Router();
-const heroController = require('../controllers/heroController');
-const asyncHandler = require('../utils/asyncHandler');
-const { authenticate } = require('../middleware/authMiddleware');
+import { Router } from 'express';
+import { getHero, updateHero } from '../controllers/heroController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public
-router.get('/', asyncHandler(heroController.getHero));
+const router = Router();
 
-// Admin Protected
-router.put('/', authenticate, asyncHandler(heroController.updateHero));
+router.get('/', asyncHandler(getHero));
+router.put('/', requireAuth, asyncHandler(updateHero));
 
-module.exports = router;
+export default router;

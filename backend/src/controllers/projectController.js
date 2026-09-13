@@ -1,21 +1,18 @@
-const { prisma } = require('../config/database');
-const { generateUniqueProjectSlug } = require('../utils/slugGenerator');
-const fileService = require('../services/fileService');
-const {
-  successResponse,
-  errorResponse,
-  paginatedResponse,
-} = require('../utils/apiResponse');
+import prisma from '../config/database.js';
+import cloudinaryService from '../services/cloudinaryService.js';
+import { generateSlug } from '../utils/slugGenerator.js';
+import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 /**
- * Get projects (supports pagination, filtering by featured, search, and active status)
+ * Get Projects
  * GET /api/projects
  */
-async function getProjects(req, res) {
-  const { page, limit, featured, search, all } = req.query;
+export const getProjects = async (req, res) => {
+  const showAll = req.query.all === 'true';
+  const { featured, search, page, limit } = req.query;
 
   const where = {};
-  if (all !== 'true') {
+  if (!showAll) {
     where.isActive = true;
   }
   if (featured !== undefined) {
@@ -29,53 +26,49 @@ async function getProjects(req, res) {
     ];
   }
 
-  // If pagination params supplied
-  if (page || limit) {
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
-    const skip = (pageNum - 1) * limitNum;
+  const take = limit ? parseInt(limit, 10) : undefined;
+  const skip = page && limit ? (parseInt(page, 10) - 1) * take : undefined;
 
-    const [total, projects] = await Promise.all([
-      prisma.project.count({ where }),
-      prisma.project.findMany({
-        where,
-        include: {
-          images: {
-            orderBy: { order: 'asc' },
-          },
+  const [projects, total] = await Promise.all([
+    prisma.project.findMany({
+      where,
+      include: {
+        images: {
+          orderBy: { order: 'asc' },
         },
-        orderBy: [{ featured: 'desc' }, { order: 'asc' }, { createdAt: 'desc' }],
-        skip,
-        take: limitNum,
-      }),
-    ]);
-
-    return paginatedResponse(res, projects, total, pageNum, limitNum, 'Projects retrieved successfully');
-  }
-
-  // Return all matching projects ordered
-  const projects = await prisma.project.findMany({
-    where,
-    include: {
-      images: {
-        orderBy: { order: 'asc' },
       },
-    },
-    orderBy: [{ featured: 'desc' }, { order: 'asc' }, { createdAt: 'desc' }],
-  });
+      orderBy: { order: 'asc' },
+      skip,
+      take,
+    }),
+    prisma.project.count({ where }),
+  ]);
 
-  return successResponse(res, projects, 'Projects retrieved successfully');
-}
+  // Ensure isVisible is true when isActive is true for complete frontend compatibility
+  const mappedProjects = projects.map((p) => ({
+    ...p,
+    isVisible: p.isActive,
+  }));
+
+  return res.status(200).json({
+    success: true,
+    message: 'Projects retrieved',
+    data: mappedProjects,
+    projects: mappedProjects,
+    total,
+    page: page ? parseInt(page, 10) : 1,
+  });
+};
 
 /**
- * Get project by ID
+ * Get Project by ID
  * GET /api/projects/:id
  */
-async function getProjectById(req, res) {
+export const getProjectById = async (req, res) => {
   const { id } = req.params;
 
   const project = await prisma.project.findUnique({
-    where: { id: Number(id) },
+    where: { id },
     include: {
       images: {
         orderBy: { order: 'asc' },
@@ -84,20 +77,23 @@ async function getProjectById(req, res) {
   });
 
   if (!project) {
-    return errorResponse(res, 'Project not found', 404);
+    return errorResponse(res, 404, 'Project not found');
   }
 
-  return successResponse(res, project, 'Project retrieved successfully');
-}
+  return successResponse(res, 200, 'Project retrieved', {
+    ...project,
+    isVisible: project.isActive,
+  });
+};
 
 /**
- * Get project by URL slug
+ * Get Project by Slug
  * GET /api/projects/slug/:slug
  */
-async function getProjectBySlug(req, res) {
+export const getProjectBySlug = async (req, res) => {
   const { slug } = req.params;
 
-  const project = await prisma.project.findUnique({
+  let project = await prisma.project.findUnique({
     where: { slug },
     include: {
       images: {
@@ -106,114 +102,166 @@ async function getProjectBySlug(req, res) {
     },
   });
 
+  // Fallback to searching by ID if not found by slug
   if (!project) {
-    return errorResponse(res, `Project with slug '${slug}' not found`, 404);
+    project = await prisma.project.findUnique({
+      where: { id: slug },
+      include: {
+        images: {
+          orderBy: { order: 'asc' },
+        },
+      },
+    });
   }
 
-  return successResponse(res, project, 'Project retrieved successfully');
-}
+  if (!project) {
+    return errorResponse(res, 404, 'Project not found');
+  }
+
+  return successResponse(res, 200, 'Project details retrieved', {
+    ...project,
+    isVisible: project.isActive,
+  });
+};
 
 /**
- * Create project
+ * Create Project
  * POST /api/projects
  */
-async function createProject(req, res) {
-  const {
-    title,
-    slug,
-    shortDescription,
-    description,
-    technologies,
-    githubUrl,
-    liveUrl,
-    thumbnailUrl,
-    featured,
-    order,
-    isActive,
-  } = req.body;
+export const createProject = async (req, res) => {
+  const data = req.body;
+  const title = (data.title || '').trim();
 
-  // Auto-generate unique slug if not explicitly provided
-  const finalSlug = slug
-    ? await generateUniqueProjectSlug(slug)
-    : await generateUniqueProjectSlug(title);
+  if (!title) {
+    return errorResponse(res, 400, 'Project title is required');
+  }
+
+  let slug = generateSlug(data.slug || title);
+  // Ensure unique slug
+  let counter = 1;
+  let uniqueSlug = slug;
+  while (await prisma.project.findUnique({ where: { slug: uniqueSlug } })) {
+    uniqueSlug = `${slug}-${counter}`;
+    counter++;
+  }
+
+  // Handle technologies and features array parsing
+  let technologies = data.technologies;
+  if (typeof technologies === 'string') {
+    technologies = technologies.split(',').map((t) => t.trim()).filter(Boolean);
+  }
+
+  let features = data.features;
+  if (typeof features === 'string') {
+    features = features.split('\n').map((f) => f.trim()).filter(Boolean);
+  }
+
+  // If thumbnail image file was uploaded
+  let thumbnailUrl = data.thumbnailUrl;
+  let thumbnailPublicId = data.thumbnailPublicId;
+  if (req.file && req.file.buffer) {
+    const uploadResult = await cloudinaryService.uploadImage(req.file.buffer, 'portfolio/projects');
+    thumbnailUrl = uploadResult.secure_url || uploadResult.url;
+    thumbnailPublicId = uploadResult.public_id;
+  }
 
   const newProject = await prisma.project.create({
     data: {
       title,
-      slug: finalSlug,
-      shortDescription: shortDescription || null,
-      description,
-      technologies: Array.isArray(technologies) ? technologies : (typeof technologies === 'string' ? JSON.parse(technologies) : null),
-      githubUrl: githubUrl || null,
-      liveUrl: liveUrl || null,
-      thumbnailUrl: thumbnailUrl || null,
-      featured: featured !== undefined ? Boolean(featured) : false,
-      order: order !== undefined ? Number(order) : 0,
-      isActive: isActive !== undefined ? Boolean(isActive) : true,
+      slug: uniqueSlug,
+      shortDescription: data.shortDescription || data.description,
+      description: data.description,
+      tagline: data.tagline,
+      category: data.category || 'Full Stack',
+      technologies: technologies || [],
+      features: features || [],
+      githubUrl: data.githubUrl || '',
+      liveUrl: data.liveUrl || '',
+      liveDemoBtnText: data.liveDemoBtnText || 'Live Demo',
+      githubBtnText: data.githubBtnText || 'GitHub',
+      detailsBtnText: data.detailsBtnText || 'View Project',
+      thumbnailUrl: thumbnailUrl || '',
+      thumbnailPublicId: thumbnailPublicId || '',
+      featured: data.featured !== undefined ? Boolean(data.featured) : false,
+      order: data.order !== undefined ? Number(data.order) : 0,
+      isActive: data.isActive !== undefined ? Boolean(data.isActive) : true,
     },
     include: {
       images: true,
     },
   });
 
-  return successResponse(res, newProject, 'Project created successfully', 201);
-}
+  return successResponse(res, 201, 'Project created successfully', {
+    ...newProject,
+    isVisible: newProject.isActive,
+  });
+};
 
 /**
- * Update project
+ * Update Project
  * PUT /api/projects/:id
  */
-async function updateProject(req, res) {
+export const updateProject = async (req, res) => {
   const { id } = req.params;
-  const {
-    title,
-    slug,
-    shortDescription,
-    description,
-    technologies,
-    githubUrl,
-    liveUrl,
-    thumbnailUrl,
-    featured,
-    order,
-    isActive,
-  } = req.body;
+  const data = req.body;
 
-  const existing = await prisma.project.findUnique({
-    where: { id: Number(id) },
-  });
+  // Search by ID first, or by slug
+  let existing = await prisma.project.findUnique({ where: { id } });
+  if (!existing) {
+    existing = await prisma.project.findUnique({ where: { slug: id } });
+  }
 
   if (!existing) {
-    return errorResponse(res, 'Project not found', 404);
+    return errorResponse(res, 404, 'Project not found');
   }
 
-  const updateData = {};
-  if (title !== undefined) updateData.title = title;
-  if (shortDescription !== undefined) updateData.shortDescription = shortDescription;
-  if (description !== undefined) updateData.description = description;
-  if (githubUrl !== undefined) updateData.githubUrl = githubUrl;
-  if (liveUrl !== undefined) updateData.liveUrl = liveUrl;
-  if (thumbnailUrl !== undefined) updateData.thumbnailUrl = thumbnailUrl;
-  if (featured !== undefined) updateData.featured = Boolean(featured);
-  if (order !== undefined) updateData.order = Number(order);
-  if (isActive !== undefined) updateData.isActive = Boolean(isActive);
-
-  if (technologies !== undefined) {
-    updateData.technologies = Array.isArray(technologies)
-      ? technologies
-      : typeof technologies === 'string'
-      ? JSON.parse(technologies)
-      : null;
+  // Handle technologies and features array parsing
+  let technologies = data.technologies;
+  if (typeof technologies === 'string') {
+    technologies = technologies.split(',').map((t) => t.trim()).filter(Boolean);
   }
 
-  // Handle slug change if provided
-  if (slug && slug !== existing.slug) {
-    updateData.slug = await generateUniqueProjectSlug(slug, existing.id);
+  let features = data.features;
+  if (typeof features === 'string') {
+    features = features.split('\n').map((f) => f.trim()).filter(Boolean);
   }
 
-  const updatedProject = await prisma.project.update({
-    where: { id: Number(id) },
-    data: updateData,
+  // If new thumbnail file uploaded
+  let thumbnailUrl = data.thumbnailUrl !== undefined ? data.thumbnailUrl : existing.thumbnailUrl;
+  let thumbnailPublicId = data.thumbnailPublicId !== undefined ? data.thumbnailPublicId : existing.thumbnailPublicId;
+  if (req.file && req.file.buffer) {
+    const uploadResult = await cloudinaryService.replaceFile(
+      req.file.buffer,
+      'portfolio/projects',
+      existing.thumbnailPublicId
+    );
+    thumbnailUrl = uploadResult.secure_url || uploadResult.url;
+    thumbnailPublicId = uploadResult.public_id;
+  }
+
+  const updatePayload = {
+    ...(data.title !== undefined && { title: data.title }),
+    ...(data.shortDescription !== undefined && { shortDescription: data.shortDescription }),
+    ...(data.description !== undefined && { description: data.description }),
+    ...(data.tagline !== undefined && { tagline: data.tagline }),
+    ...(data.category !== undefined && { category: data.category }),
+    ...(technologies !== undefined && { technologies }),
+    ...(features !== undefined && { features }),
+    ...(data.githubUrl !== undefined && { githubUrl: data.githubUrl }),
+    ...(data.liveUrl !== undefined && { liveUrl: data.liveUrl }),
+    ...(data.liveDemoBtnText !== undefined && { liveDemoBtnText: data.liveDemoBtnText }),
+    ...(data.githubBtnText !== undefined && { githubBtnText: data.githubBtnText }),
+    ...(data.detailsBtnText !== undefined && { detailsBtnText: data.detailsBtnText }),
+    ...(thumbnailUrl !== undefined && { thumbnailUrl }),
+    ...(thumbnailPublicId !== undefined && { thumbnailPublicId }),
+    ...(data.featured !== undefined && { featured: Boolean(data.featured) }),
+    ...(data.order !== undefined && { order: Number(data.order) }),
+    ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
+  };
+
+  const updated = await prisma.project.update({
+    where: { id: existing.id },
+    data: updatePayload,
     include: {
       images: {
         orderBy: { order: 'asc' },
@@ -221,147 +269,116 @@ async function updateProject(req, res) {
     },
   });
 
-  return successResponse(res, updatedProject, 'Project updated successfully');
-}
+  return successResponse(res, 200, 'Project updated successfully', {
+    ...updated,
+    isVisible: updated.isActive,
+  });
+};
 
 /**
- * Delete project
+ * Delete Project
  * DELETE /api/projects/:id
  */
-async function deleteProject(req, res) {
+export const deleteProject = async (req, res) => {
   const { id } = req.params;
 
-  const project = await prisma.project.findUnique({
-    where: { id: Number(id) },
+  let existing = await prisma.project.findUnique({
+    where: { id },
     include: { images: true },
   });
-
-  if (!project) {
-    return errorResponse(res, 'Project not found', 404);
+  if (!existing) {
+    existing = await prisma.project.findUnique({
+      where: { slug: id },
+      include: { images: true },
+    });
   }
 
-  // Delete all associated project images from Cloudinary
-  if (project.images && project.images.length > 0) {
-    for (const img of project.images) {
-      if (img.cloudinaryPublicId) {
-        await fileService.deleteFile(img.cloudinaryPublicId).catch((err) => {
-          console.warn(`[Project] Failed to delete Cloudinary asset ${img.cloudinaryPublicId}:`, err.message);
-        });
+  if (!existing) {
+    return errorResponse(res, 404, 'Project not found');
+  }
+
+  // Delete thumbnail from Cloudinary if exists
+  if (existing.thumbnailPublicId) {
+    cloudinaryService.deleteFile(existing.thumbnailPublicId, 'image').catch(() => {});
+  }
+
+  // Delete project screenshots from Cloudinary
+  if (existing.images && existing.images.length > 0) {
+    for (const img of existing.images) {
+      if (img.publicId) {
+        cloudinaryService.deleteFile(img.publicId, 'image').catch(() => {});
       }
     }
   }
 
-  await prisma.project.delete({
-    where: { id: Number(id) },
-  });
+  await prisma.project.delete({ where: { id: existing.id } });
 
-  return successResponse(res, null, 'Project and associated images deleted successfully');
-}
+  return successResponse(res, 200, 'Project deleted successfully');
+};
 
 /**
- * Add image to project
+ * Add Project Screenshot Image
  * POST /api/projects/:id/images
  */
-async function addProjectImage(req, res) {
+export const addProjectImage = async (req, res) => {
   const { id } = req.params;
-  const { altText, order, imageUrl: directImageUrl } = req.body;
 
-  const project = await prisma.project.findUnique({
-    where: { id: Number(id) },
-  });
-
-  if (!project) {
-    return errorResponse(res, 'Project not found', 404);
+  let existing = await prisma.project.findUnique({ where: { id } });
+  if (!existing) {
+    existing = await prisma.project.findUnique({ where: { slug: id } });
   }
 
-  let finalImageUrl = directImageUrl;
-  let cloudinaryPublicId = req.body.cloudinaryPublicId || null;
-  let fileName = req.body.fileName || null;
-  let fileType = req.body.fileType || null;
-  let fileSize = req.body.fileSize ? Number(req.body.fileSize) : null;
-
-  if (req.file) {
-    const uploadResult = await fileService.uploadImage(req.file, {
-      folder: 'portfolio/projects',
-    });
-    finalImageUrl = uploadResult.url;
-    cloudinaryPublicId = uploadResult.publicId;
-    fileName = uploadResult.fileName;
-    fileType = uploadResult.fileType;
-    fileSize = uploadResult.fileSize;
+  if (!existing) {
+    return errorResponse(res, 404, 'Project not found');
   }
 
-  if (!finalImageUrl) {
-    return errorResponse(res, 'Image file or imageUrl is required', 400);
+  if (!req.file || !req.file.buffer) {
+    return errorResponse(res, 400, 'Image file is required');
   }
 
-  let newImage;
-  try {
-    newImage = await prisma.projectImage.create({
-      data: {
-        projectId: Number(id),
-        imageUrl: finalImageUrl,
-        cloudinaryPublicId,
-        fileName,
-        fileType,
-        fileSize,
-        altText: altText || null,
-        order: order !== undefined ? Number(order) : 0,
-      },
-    });
-  } catch (dbError) {
-    // If DB fails and we uploaded to Cloudinary, rollback asset
-    if (cloudinaryPublicId && req.file) {
-      await fileService.deleteFile(cloudinaryPublicId).catch((err) => {
-        console.warn('[ProjectImage] Failed to rollback orphan Cloudinary file:', err.message);
-      });
-    }
-    throw dbError;
-  }
+  const uploadResult = await cloudinaryService.uploadImage(
+    req.file.buffer,
+    'portfolio/project-images'
+  );
 
-  return successResponse(res, newImage, 'Project image added successfully', 201);
-}
-
-/**
- * Delete image from project
- * DELETE /api/projects/:id/images/:imageId
- */
-async function deleteProjectImage(req, res) {
-  const { id, imageId } = req.params;
-
-  const projectImage = await prisma.projectImage.findFirst({
-    where: {
-      id: Number(imageId),
-      projectId: Number(id),
+  const newImage = await prisma.projectImage.create({
+    data: {
+      projectId: existing.id,
+      imageUrl: uploadResult.secure_url || uploadResult.url,
+      publicId: uploadResult.public_id,
+      caption: req.body.caption || '',
+      order: req.body.order !== undefined ? Number(req.body.order) : 0,
     },
   });
 
-  if (!projectImage) {
-    return errorResponse(res, 'Project image not found', 404);
-  }
+  return successResponse(res, 201, 'Project image uploaded successfully', newImage);
+};
 
-  // Delete from Cloudinary first. If Cloudinary deletion fails, do not silently delete DB record.
-  if (projectImage.cloudinaryPublicId) {
-    try {
-      await fileService.deleteFile(projectImage.cloudinaryPublicId);
-    } catch (cloudErr) {
-      console.error('[ProjectImage] Cloudinary deletion failed:', cloudErr.message);
-      return errorResponse(
-        res,
-        'Failed to delete image from Cloudinary storage. Database record was not deleted.',
-        500
-      );
-    }
-  }
+/**
+ * Delete Project Screenshot Image
+ * DELETE /api/projects/:id/images/:imageId
+ */
+export const deleteProjectImage = async (req, res) => {
+  const { id, imageId } = req.params;
 
-  await prisma.projectImage.delete({
-    where: { id: Number(imageId) },
+  const image = await prisma.projectImage.findUnique({
+    where: { id: imageId },
   });
 
-  return successResponse(res, null, 'Project image deleted successfully');
-}
+  if (!image) {
+    return errorResponse(res, 404, 'Project image not found');
+  }
 
-module.exports = {
+  if (image.publicId) {
+    cloudinaryService.deleteFile(image.publicId, 'image').catch(() => {});
+  }
+
+  await prisma.projectImage.delete({ where: { id: imageId } });
+
+  return successResponse(res, 200, 'Project image deleted successfully');
+};
+
+export default {
   getProjects,
   getProjectById,
   getProjectBySlug,

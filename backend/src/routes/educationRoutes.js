@@ -1,16 +1,20 @@
-const express = require('express');
-const router = express.Router();
-const educationController = require('../controllers/educationController');
-const asyncHandler = require('../utils/asyncHandler');
-const { authenticate } = require('../middleware/authMiddleware');
+import { Router } from 'express';
+import {
+  getEducation,
+  getEducationById,
+  createEducation,
+  updateEducation,
+  deleteEducation,
+} from '../controllers/educationController.js';
+import { requireAuth } from '../middleware/authMiddleware.js';
+import asyncHandler from '../utils/asyncHandler.js';
 
-// Public
-router.get('/', asyncHandler(educationController.getEducations));
-router.get('/:id', asyncHandler(educationController.getEducationById));
+const router = Router();
 
-// Admin Protected
-router.post('/', authenticate, asyncHandler(educationController.createEducation));
-router.put('/:id', authenticate, asyncHandler(educationController.updateEducation));
-router.delete('/:id', authenticate, asyncHandler(educationController.deleteEducation));
+router.get('/', asyncHandler(getEducation));
+router.get('/:id', asyncHandler(getEducationById));
+router.post('/', requireAuth, asyncHandler(createEducation));
+router.put('/:id', requireAuth, asyncHandler(updateEducation));
+router.delete('/:id', requireAuth, asyncHandler(deleteEducation));
 
-module.exports = router;
+export default router;
