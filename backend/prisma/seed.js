@@ -10,8 +10,8 @@ async function main() {
   console.log('🌱 Starting database seed...');
 
   // 1. Seed Admin User from .env
-  const adminEmail = process.env.ADMIN_EMAIL || 'admin@dhanush.dev';
-  const adminPassword = process.env.ADMIN_PASSWORD || 'adminpassword123';
+  const adminEmail = process.env.ADMIN_EMAIL || 'dhanush2005mp@gmail.com';
+  const adminPassword = process.env.ADMIN_PASSWORD || 'Md@15102005';
   const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
   const existingAdmin = await prisma.adminUser.findFirst();
