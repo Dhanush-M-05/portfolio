@@ -27,7 +27,6 @@ const PROFILE_FIELDS = [
   'aboutSubheading',
   'avatarUrl',
   'avatarPublicId',
-  'resumeViewRoute',
   'stats',
 ];
 
